@@ -1,0 +1,128 @@
+{
+    "broker": {
+        "errors": {
+            "parse": "JSON parse error",
+            "log": "see log...",
+            "missing-conf": "missing connection config",
+            "process": "Message processing error: __error__",
+            "transport": "__transport__ not supported"
+        },
+        "label": {
+            "ack": "Acknowledge",
+            "agent": "Agent",
+            "color": "Color",
+            "connection": "Connection",
+            "cootie": "Identifier",
+            "custom": "Custom",
+            "debug": "Debug",
+            "field": "Field (key)",
+            "host": "Host",
+            "hostname": "Hostname",
+            "id": "ID",
+            "max": "Max Connections",
+            "mode": "Mode",
+            "node": "cootie",
+            "out": "Output",
+            "palette": "Color Palette",
+            "params": "Parameters",
+            "port": "Port",
+            "stat": "Status",
+            "tag": "tag",
+            "topic": "Topic",
+            "transport": "Transport"
+        },
+        "mode": {
+            "simple": "Simple (ID based message)",
+            "custom": "Custom (JSON/JSONata)",
+            "bypass": "Bypass (Complete message)"
+        },
+        "placeholder": {
+            "color": "Custom node color to hint at node use",
+            "cootie": "Identifier for referencing Cootie client/server",
+            "custom": "Optional custom payload object",
+            "field": "Optional field (key) for scalar payload merge",
+            "host": "HTTP host path",
+            "hostname": "Identifier for HTTP host",
+            "id": "Alternate serial I/O endpoint identifer",
+            "max": "Max node connections",
+            "out": "Optional template string w/o backticks",
+            "port": "Optional http port",
+            "serial": "Remote broker serial connection",
+            "stat": "Optional template string w/o backticks",
+            "tag": "Recommended serial I/O message tag",
+            "transport": "Select the type of remote broker conection"
+        },
+        "tips": {
+            "ack": "Tip: Sets a per message acknowledgement mode",
+            "color": "Tip: Node color (reference) can be set per application, such as a specific color for sensors.",
+            "cootie": {
+                "note": "Important: Create Cootie connections in client/server pairs using the same identifier",
+                "reference": "Reference identifier for cootie connection, for example, the node name"
+            },
+            "custom": "Tip: Alternate customized JSON or JSONata serial payload",
+            "id": "Tip: Remote broker end point identifier, alternate payload if msg.payload and custom property is not defined",
+            "field": "Tip: Key for scalar payload merge, e.g. field:state and msg.payload:'ON' --> payload:{..., state:'ON'}",
+            "http": {
+                "hostname": "Reference for this connection",
+                "host": "HTTP host for requests",
+                "port": "Optional port, which may also be appended to host"
+            },
+            "max": "Tip: Max number of node connections to server",
+            "mode": "Tip: Select a configuration mode to set the appropriate properties",
+            "out": "Tip: Output 'template' string used to format/filter the output message payload; default whole response if undefined",
+            "palette": "Tip: Choose a group of colors for node color assignement",
+            "paletteCfg": {
+                "name": "Name the palette for reference in the node configuration edit dialog",
+                "colorref": "Define a reference for the color assignment, e.g. Sensors, Commands, Inside, Temps, ...",
+                "colorfill": "Define the referenced color; hint: use X11/web-safe color names. See Wikipedia Web Colors page"
+            },
+            "connection": "Tip: Remote broker communications connection",
+            "stat": "Tip: Status 'template' string for the response, if present, will be assigned to node status text",
+            "tag": "Tip: Route for return data (i.e. event listener tag); See node help for details",
+            "topic": "Tip: Output message topic; defaults to last received message topic, or tag, id or name properties.",
+            "transport": "Type of connection transport mode"
+        }
+    },
+    "serial": {
+        "label": {
+            "connected": "CONNECTED",
+            "disconnected": "DISCONNECTED",
+            "serialport": "Serial Port",
+            "settings": "Settings",
+            "baudrate": "Baud Rate",
+            "databits": "Data Bits",
+            "parity": "Parity",
+            "stopbits": "Stop Bits",
+            "none": "none",
+            "note": "Note: USB data transfers don't use these settings, but the USB serial driver, expects them.",
+            "timeout": "Timeout",
+            "tnote": "Connection timeout retry."
+        },
+        "placeholder": {
+            "serialport": "for example: /dev/ttyUSB0/"
+        },
+        "parity": {
+            "none": "None",
+            "even": "Even",
+            "mark": "Mark",
+            "odd": "Odd",
+            "space": "Space"
+        },
+        "onopen": "opened as __config__",
+        "errors": {
+            "missing-conf": "missing serial config",
+            "error": "serial port __port__ error: __error__",
+            "unexpected-close": "serial port __port__ closed unexpectedly",
+            "closed": "serial port __port__ closed",
+            "list": "Failed to list ports. Please enter manually.",
+            "badbaudrate": "Baudrate is invalid"
+        }
+    },
+    "transport": {
+        "transports": {
+            "serial": "Serial Port",
+            "http": "HTTP",
+            "cootie": "Cootie"
+        }
+    }
+}

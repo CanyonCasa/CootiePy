@@ -1,0 +1,71 @@
+{
+    "cfg": {
+        "ack": false,
+        "quiet": false,
+        "verbose": true
+    },
+    "xjobs": [
+        { "id": "report", "at": "0 */3 10 * * *", "evt":{"tag": "status", "cmd": "status", "ping": "reporting..." }},
+        { "id": "alt", "at": "0 */2 10 * * *", "evt":{"tag": "status", "cmd": "status", "ping": "alt report..." }}
+    ],
+    "io":[
+        {
+            "driver": "OneWire",
+            "debug": false,
+            "name": "1wire",
+            "params": {"pin": "D1"}
+        },
+        {
+            "driver": "Analog",
+            "debug": true,
+            "name": "analog"
+        },
+        {
+            "driver": "Digital",
+            "name": "digital",
+            "params": {
+                "test": {"pin":"D3", "init": 0}
+            }
+        },
+        {
+            "interface": "1wire",
+            "desc": "Outside temperature measurement (F)", 
+            "name": "tOutside",
+            "sn": "28 69 2F 2C 0C 32 20 9A",
+            "func": ["temperature","resolution"],
+            "params": {"units": "F", "resolution": 8}
+        },
+        {
+            "interface": "1wire",
+            "desc": "Inside temperature measurement (F)",
+            "name": "tInside",
+            "xsn": "285445FF0000003C",
+            "sn": "28-5445ff000000",
+            "type": "temp"
+        },
+        {
+            "interface": "1wire",
+            "desc": "Water flow counter",
+            "name": "flow",
+            "sn": "1D F0 F7 09 00 00 00 D5",
+            "type": "counter"
+        },
+        {
+            "interface": "analog",
+            "desc": "Input ADC",
+            "name": "ch2",
+            "params": {"pin":"A2", "range":3.3, "bias": 0, "units":"V"}
+        },
+        {
+            "interface": "analog",
+            "desc": "Output DAC",
+            "name": "ch0",
+            "params": {"pin":"A0", "range":3.3, "bias": 0, "units":"V", "init": 0}
+        },
+        {
+            "interface": "digital",
+            "desc": "Test output",
+            "name": "test"
+        }
+    ]
+}

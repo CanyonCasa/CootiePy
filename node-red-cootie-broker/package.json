@@ -1,0 +1,27 @@
+{
+  "name": "@canyoncasa/node-red-cootie-broker",
+  "version": "0.7.0",
+  "description": "Node-red connection broker for communication with remote I/O broker",
+  "main": "broker.js",
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "cootie-broker": "broker.js"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "node-red",
+    "connection",
+    "network",
+    "serial",
+    "broker"
+  ],
+  "author": "CanyonCasa",
+  "dependencies"  : {
+    "serialport"   : "^10.5.0"
+  },
+  "license": "ISC"
+}

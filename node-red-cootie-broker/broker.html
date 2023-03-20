@@ -1,0 +1,487 @@
+<!-- color palette configuration node... --> 
+<script type="text/html" data-template-name="cootie-colors-config">
+    <style>ol#node-input-colors-container .red-ui-typedInput-container {flex:1;}</style>
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-config-input-name" data-i18n="[placeholder]node-red:common.label.name">
+        <div class="form-tips" id="tip-palette-name" hidden><span data-i18n="broker.tips.paletteCfg.name"></span></div>
+    </div>
+    <div class="form-row node-input-colors-container-row">
+        <ol id="node-input-colors-container"></ol>
+        <div class="form-tips" id="tip-palette-colorref" hidden><span data-i18n="broker.tips.paletteCfg.colorref"></span></div>
+        <div class="form-tips" id="tip-palette-colorfill" hidden><span data-i18n="broker.tips.paletteCfg.colorfill"></span></div>
+    </div>
+</script>
+
+<script type="text/javascript">
+(function(){
+    function validator(colors) {    // returns 'false' if color isn't assigned, i.e. not a valid X11/web-safe name
+        if (!colors || colors.length===0) return true;
+        var s = new Option().style;
+        return colors.every(pc=>{s.color=pc.fill; return s.color===pc.fill.toLowerCase()});
+    }
+
+    RED.nodes.registerType('cootie-colors-config',{
+        category: 'config',
+        defaults: {
+            name: {value: "Default Palette", required:true},
+            colors: {value:[{fill:"Chocolate", ref:"Default"}],required:true, validate: validator}
+        },
+        label: function() { return this.name || this._("broker.label.palette"); },
+        oneditprepare: function() {
+            var node = this;
+            $("#node-input-colors-container").editableList({
+                addItem: function(container,i,color) {
+                    container.css({overflow: 'hidden', whitespace: 'nowrap'})
+                    let fragment = document.createDocumentFragment();
+                    var div = $('<div/>',{style:"display:flex;align-items: baseline"}).appendTo(fragment);
+                    var ref = $('<input/>',{class:"node-input-color-property-ref", type:"text", value:color.ref}).appendTo(div);
+                    var fill = $('<input/>',{class:"node-input-color-property-fill", type:"text", value: color.fill}).appendTo(div);
+                    container[0].appendChild(fragment);
+                    var propInput = fill.on("input",function(evt){ 
+                        var valid = validator([{fill:evt?.target?.value}]);
+                        if (valid) {fill.removeClass("input-error")} else {fill.addClass("input-error")};
+                    });
+                },
+                removable: true,
+                sortable: true
+            })
+            for (var i=0; i<this.colors.length; i++) {
+                $("#node-input-colors-container").editableList('addItem',this.colors[i])
+            }
+
+            // add handlers for field tips...
+            var addTipHandlers = (sel,tip)=>{
+                try {
+                    $(sel).on('focus', function () { $(tip).show(); });
+                    $(sel).on('blur', function () { $(tip).hide(); });
+                } catch(e) { console.error(sel+': ',e)}
+            };
+            //addTipHandlers("#node-connection input.red-ui-typedInput-input","#tip-connection");
+            addTipHandlers("#node-config-input-name","#tip-palette-name");
+            addTipHandlers("input.node-input-color-property-ref","#tip-palette-colorref");
+            addTipHandlers("input.node-input-color-property-fill","#tip-palette-colorfill");
+
+        },
+        oneditsave: function() {
+            var node = this;
+            node.colors = [];
+            var colors = $("#node-input-colors-container").editableList('items');
+            colors.each(function(i){
+                var color = $(this);
+                var ref = color.find(".node-input-color-property-ref").val();
+                var fill = color.find(".node-input-color-property-fill").val();
+                node.colors.push({ref: ref, fill: fill})
+            })
+        }
+     });
+})();
+</script>
+
+<!-- connection configuration node... --> 
+<script type="text/html" data-template-name="cootie-connection-config">
+    <style>
+        div.form-row input#node-config-input-debug {width:24px; margin-left:10px; vertical-align:top;}
+        div.form-row input[name=node-config-input-agent] {width:24px; margin-left:10px; vertical-align:top;}
+    </style>
+    <div class="form-row">
+        <label for="node-config-input-transport"><i class="fa fa-random"></i> <span data-i18n="broker.label.transport"></span></label>
+        <select id="node-config-input-transport"></select>
+    </div>
+    <div class="form-tips" id="tip-transport"><span data-i18n="broker.tips.transport"></span></div>  
+    <span id="form-cootie">
+    <div class="form-row">
+        <label for="node-config-input-reference"><i class="fa fa-wrench"></i> <span data-i18n="broker.label.cootie"></span></label>
+        <input type="text" id="node-config-input-reference"  data-i18n="[placeholder]broker.placeholder.cootie" />
+    </div>
+    <div class="form-tips" id="tip-cootie.reference"><span data-i18n="broker.tips.cootie.reference"></span></div>  
+    <div class="form-row">
+        <label for="node-config-input-agent"><i class="fa fa-tag"></i> <span data-i18n="broker.label.agent"></span></label>
+        <input type="radio" name="node-config-input-agent" value="client" />Client
+        <input type="radio" name="node-config-input-agent" value="server" />Server
+    </div>
+    <div class="form-tips" id="tip-cootie.note"><i class="fa fa-info"></i> <span data-i18n="broker.tips.cootie.note"></span></div>  
+    </span>
+    <span id="form-http">
+    <div class="form-row">
+        <label for="node-config-input-hostname"><i class="fa fa-wrench"></i> <span data-i18n="broker.label.hostname"></span></label>
+        <input type="text" id="node-config-input-hostname"  data-i18n="[placeholder]broker.placeholder.hostname" />
+    </div>
+    <div class="form-tips" id="tip-http-hostname"></i><span data-i18n="broker.tips.http.hostname"></span></div>  
+    <div class="form-row">
+        <label for="node-config-input-host"><i class="fa fa-wrench"></i> <span data-i18n="broker.label.host"></span></label>
+        <input type="text" id="node-config-input-host"  data-i18n="[placeholder]broker.placeholder.host" />
+    </div>
+    <div class="form-tips" id="tip-http-host"></i><span data-i18n="broker.tips.http.host"></span></div>  
+    <div class="form-row">
+        <label for="node-config-input-port"><i class="fa fa-wrench"></i> <span data-i18n="broker.label.port"></span></label>
+        <input type="text" id="node-config-input-port"  data-i18n="[placeholder]broker.placeholder.port" />
+    </div>
+    <div class="form-tips" id="tip-http-port"></i><span data-i18n="broker.tips.http.port"></span></div>  
+    </span>
+    <span id="form-serial">
+    <div class="form-row">
+        <label for="node-config-input-serialport"><i class="fa fa-random"></i> <span data-i18n="serial.label.serialport"></span></label>
+        <input type="text" id="node-config-input-serialport" style="width:66%;" data-i18n="[placeholder]serial.placeholder.serialport">
+        <a id="node-config-lookup-serial" class="red-ui-button"><i id="node-config-lookup-serial-icon" class="fa fa-search"></i></a>
+    </div>
+    <div class="form-row" style="margin-bottom:8px;">
+        <table width="100%">
+        <tr style="line-height:10px;">
+        <td width="90px" style="font-size:14px;"><i class="fa fa-wrench"></i> <span data-i18n="serial.label.settings"></span></td>
+        <td width="110px" data-i18n="serial.label.baudrate"></td>
+        <td width="70px" data-i18n="serial.label.databits"></td>
+        <td width="80px" data-i18n="serial.label.parity"></td>
+        <td width="70px" data-i18n="serial.label.stopbits"></td>
+        <tr>
+        <td></td>
+        <td><input type="text" id="node-config-input-baud" style="width:92%; height:28px;"></td>
+        <td><input type="text" id="node-config-input-databits" style="width:92%; height:28px;"></td>
+        <td>
+            <select type="text" id="node-config-input-parity" style="width:90%; height:28px;">
+                <option value="none" data-i18n="serial.parity.none"></option>
+                <option value="even" data-i18n="serial.parity.even"></option>
+                <option value="mark" data-i18n="serial.parity.mark"></option>
+                <option value="odd" data-i18n="serial.parity.odd"></option>
+                <option value="space" data-i18n="serial.parity.space"></option>
+            </select>
+        </td>
+        <td><input type="text" id="node-config-input-stopbits" style="width:60px; height:28px;"></td>
+        </tr>
+        <tr style="line-height:20px;">
+        <td></td>
+        <td colspan="4"><span data-i18n="serial.label.note"></span></td>
+        </tr>
+        <tr style="line-height:10px;">
+        <td width="90px" style="font-size:14px;"><i class="fa fa-wrench"></i> <span data-i18n="serial.label.timeout"></span></td>
+        <td><input type="text" id="node-config-input-timeout" style="width:92%; height:28px;"></td>
+        <td colspan="3"><span data-i18n="serial.label.tnote"></span></td>
+        </tr>
+        </table>
+    </div>
+    </span>
+    <div class="form-row">
+        <label for="node-config-input-max"><i class="fa fa-tag"></i> <span data-i18n="broker.label.max"></span></label>
+        <input type="text" id="node-config-input-max" style="width:40px;" data-i18n="[placeholder]broker.placeholder.max" />
+    </div>
+    <div class="form-tips" id="tip-max"><i class="fa fa-info"></i> <span data-i18n="broker.tips.max"></span></div>  
+    <div class="form-row" style="margin-top:40px;">
+        <label for="node-config-input-debug"><i class="fa fa-wrench"></i> <span data-i18n="broker.label.debug"></span></label>
+        <input type="checkbox" id="node-config-input-debug" />Verbose debug/trace messages
+    </div>
+</script>
+
+<script type="text/javascript">
+(function() {
+    function makeLabel(transport,cfg) {
+        switch (transport) {
+            case 'cootie': 
+                var {reference,agent} = cfg || {};
+                return `Cootie:${reference}:${agent}`;
+            case 'http':
+                var {port,host,hostname} = cfg || {};
+                return hostname || `${host}${port?":"+port:""}`;
+            case 'serial':
+                var {serialport='',baud=115200,databits=8,parity='none',stopbits=1} = cfg || {};
+                return `${serialport}:${baud}-${databits}${parity.charAt(0).toUpperCase()}${stopbits}`;
+            default:
+                return "unknown transport"
+        };
+    }
+    RED.nodes.registerType('cootie-connection-config',{
+        category: 'config',
+        defaults: {
+            transport: {value:"", required:true},   // connection transport mechanism
+            config: {value: {}},
+            debug: {value: false},
+        },
+        label: function() { return makeLabel(this.transport,this.config); },
+        oneditprepare: function() {
+            var seen = (see)=>['serial','http','cootie'].forEach(t=>{see===t ? $(`#form-${t}`).show() : $(`#form-${t}`).hide()})
+            // setup the transport options...
+            var ttSelect = $("#node-config-input-transport");
+            ['serial','http','cootie'].forEach(t=>ttSelect[0].add(new Option(this._(`transport.transports.${t}`),t)))
+            ttSelect.on("change",function(){
+                var tt = $("#node-config-input-transport").val();
+                seen(tt||'cootie');
+            });
+            ttSelect.val(this.transport || 'cootie');
+            seen(ttSelect.val());
+            // unpack connection configuration properties...
+            var {reference, agent, hostname, host, port, serialport, baud, databits, parity, stopbits, timeout, max } = this.config || {};
+            $("#node-config-input-max").val(max||'10');
+            // unpack cootie emitter connection properties...
+            $("#node-config-input-reference").val(reference||'');
+            $(`input[name='node-config-input-agent'][value='${agent||"client"}']`).prop('checked',true);
+            // unpack http connection properties...
+            $("#node-config-input-hostname").val(hostname||'');
+            $("#node-config-input-host").val(host||'');
+            $("#node-config-input-port").val(port||'')
+            // unpack serial connection properties...
+            $("#node-config-input-serialport").val(serialport||'')
+            $("#node-config-input-baud").val(baud||'115200')
+            $("#node-config-input-databits").val(databits||'8')
+            $("#node-config-input-parity").val(parity||'none')
+            $("#node-config-input-stopbits").val(stopbits||'1')
+            $("#node-config-input-timeout").val(timeout||RED.settings.serialReconnectTime||10000);
+            try { $("#node-config-input-serialport").autocomplete("destroy"); } catch(err) {}
+            $("#node-config-lookup-serial").click(function() {
+                $("#node-config-lookup-serial").addClass('disabled');
+                $.getJSON('serialports',function(data) {
+                    $("#node-config-lookup-serial").removeClass('disabled');
+                    var ports = data || [];
+                    $("#node-config-input-serialport").autocomplete({
+                        source:ports,
+                        minLength:0,
+                        close: function( event, ui ) {
+                            $("#node-config-input-serialport").autocomplete("destroy");
+                        }
+                    }).autocomplete("search","");
+                });
+            });
+        },
+        oneditsave: function() {
+            // pack configuration values...
+            var transport = $("#node-config-input-transport").val();
+            switch (transport) {
+                case 'cootie':
+                    var agent = $("input[name='node-config-input-agent']:checked").val();
+                    this.config = {reference:$("#node-config-input-reference").val(), agent: agent};
+                    break;
+                case 'http':
+                    this.config = { 
+                        host: $("#node-config-input-host").val(), 
+                        port: $("#node-config-input-port").val(),
+                        name: $("#node-config-input-hostname").val()
+                    };
+                    break;
+                case 'serial':
+                    this.config = {
+                        serialport: $("#node-config-input-serialport").val() || '',
+                        baud: $("#node-config-input-baud").val() || '115200',
+                        databits: $("#node-config-input-databits").val() || '8',
+                        parity: $("#node-config-input-parity").val() || 'none',
+                        stopbits: $("#node-config-input-stopbits").val() || '1',
+                        timeout: $("#node-config-input-timeout").val() || RED.settings.serialReconnectTime||'10000',
+                    };
+                    break;
+                default:
+                    this.config = {};
+            };
+            this.config.max = $("#node-config-input-max").val() || '';
+            this.config.label = makeLabel(transport,this.config);
+        }
+    });
+})();
+</script>
+
+<!-- cootie broker (palette) node... --> 
+<script type="text/html" data-template-name="cootie-broker">
+    <div class="form-row"><p>Node properties...</p></div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+    <div class="form-row" id="node-connection">
+        <label for="node-input-connection"><i class="fa fa-random"></i><span data-i18n="broker.label.connection"></span></label>
+        <input type="text" id="node-input-connection">
+    </div>
+    <div class="form-row" id="node-palette">
+        <label for="node-input-palette"><i class="fa fa-tag"></i><span data-i18n="broker.label.palette"></span></label>
+        <input type="text" id="node-input-palette">
+    </div>
+    <div class="form-row" id="node-color">
+        <label for="node-input-colorRef"><i class="fa fa-tag"></i><span data-i18n="broker.label.color"></span></label>
+        <select id="node-input-colorRef"></select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-mode"><i class="fa fa-tag"></i><span data-i18n="broker.label.mode"></span></label>
+        <select id="node-input-mode">
+            <option value="simple" data-i18n="broker.mode.simple"></option>
+            <option value="custom" data-i18n="broker.mode.custom"></option>
+            <option value="bypass" data-i18n="broker.mode.bypass"></option>
+        </select>
+    </div>
+    <div class="form-row" id="node-msg-create"><p>Message creation and routing properties...</p></div>
+    <div class="form-row" id="node-tag">
+        <label for="node-input-tag"><i class="fa fa-tag"></i> <span data-i18n="broker.label.tag"></span></label>
+        <input type="text" id="node-input-tag" data-i18n="[placeholder]broker.placeholder.tag">
+    </div>
+    <div class="form-row" id="node-ceid">
+        <label for="node-input-ceid"><i class="fa fa-tag"></i> <span data-i18n="broker.label.id"></span></label>
+        <input type="text" id="node-input-ceid" data-i18n="[placeholder]broker.placeholder.id">
+    </div>
+    <div class="form-row" id="node-custom">
+        <label id="node-input-custom-label" for="node-input-custom"><i class="fa fa-tag"></i> <span data-i18n="broker.label.custom"></span></label>
+        <input type="text" id="node-input-custom" data-i18n="[placeholder]broker.placeholder.custom">
+        <input type="hidden" id="node-input-customType" />
+    </div>
+    <div class="form-row" id="node-field">
+        <label for="node-input-field"><i class="fa fa-tag"></i> <span data-i18n="broker.label.field"></span></label>
+        <input type="text" id="node-input-field" data-i18n="[placeholder]broker.placeholder.field">
+    </div>
+    <div class="form-row" id="node-ack">
+        <label for="node-input-ack"><i class="fa fa-tag"></i> <span data-i18n="broker.label.ack"></span></label>
+        <select id="node-input-ack" >
+            <option value="">None</option>
+            <option value="true">Ack</option>
+            <option value="log">Log</option>
+            <option value="echo">Echo</option>
+        </select>
+    </div>
+    <div class="form-row" id="node-msg-process"><p>Message output processing properties...</p></div>
+    <div class="form-row" id="node-topic">
+        <label for="node-input-topic"><i class="fa fa-tag"></i> <span data-i18n="broker.label.topic"></span></label>
+        <input type="text" id="node-input-topic" data-i18n="[placeholder]broker.placeholder.topic">
+    </div>
+    <div class="form-row" id="node-out">
+        <label for="node-input-out"><i class="fa fa-tag"></i> <span data-i18n="broker.label.out"></span></label>
+        <input type="text" id="node-input-out" data-i18n="[placeholder]broker.placeholder.out">
+    </div>
+    <div class="form-row" id="node-stat">
+        <label for="node-input-stat"><i class="fa fa-tag"></i> <span data-i18n="broker.label.stat"></span></label>
+        <input type="text" id="node-input-stat" data-i18n="[placeholder]broker.placeholder.stat">
+    </div>
+    <div class="form-tips" id="tip-connection" hidden><span data-i18n="broker.tips.connection"></span></div>
+    <div class="form-tips" id="tip-palette" hidden><span data-i18n="broker.tips.palette"></span></div>
+    <div class="form-tips" id="tip-color" hidden><span data-i18n="broker.tips.color"></span></div>
+    <div class="form-tips" id="tip-mode" hidden><span data-i18n="broker.tips.mode"></span></div>
+    <div class="form-tips" id="tip-tag" hidden><span data-i18n="broker.tips.tag"></span></div>
+    <div class="form-tips" id="tip-id" hidden><span data-i18n="broker.tips.id"></span></div>
+    <div class="form-tips" id="tip-field" hidden><span data-i18n="broker.tips.field"></span></div>
+    <div class="form-tips" id="tip-ack" hidden><span data-i18n="broker.tips.ack"></span></div>
+    <div class="form-tips" id="tip-custom" hidden><span data-i18n="broker.tips.custom"></span></div>
+    <div class="form-tips" id="tip-topic" hidden><span data-i18n="broker.tips.topic"></span></div>
+    <div class="form-tips" id="tip-out" hidden><span data-i18n="broker.tips.out"></span></div>
+    <div class="form-tips" id="tip-stat" hidden><span data-i18n="broker.tips.stat"></span></div>
+</script>
+
+<!-- cootie broker node -->
+<script type="text/javascript">
+(function() {
+    var nodeDefaultPaletteColor = 'Chocolate';
+    var nodeDefaultPalette = {name:'Default Palette', colors:[{fill:nodeDefaultPaletteColor, ref: 'Default'}]}
+    function setNodeColor(node) {
+        var colors = RED.nodes.node(node.palette)?.colors;
+        if (!colors) return;
+        var ref = node.colorRef || nodeDefaultPalette.colors[0].ref;
+        node.colorRef = ref;
+        var color = colors.filter(c=>c.ref===ref)[0]?.fill || nodeDefaultPalette.colors[0].fill;
+        var element = ($(`#${node.id} > rect`)||[])[0];
+        console.log('node element',node.id,!!element)
+        if (element) element.setAttribute('fill',color);
+    }
+
+    RED.nodes.registerType('cootie-broker',{
+        category: 'network',
+        defaults: {
+            connection: {value:"", type:"cootie-connection-config", required:true},
+            agent: {value: ""},
+            name: {value:""},
+            palette: {value:"", type:"cootie-colors-config"},
+            colorRef: {value: ""},
+            mode: {value: ""},
+            tag: {value:""},
+            topic: {value:""},
+            ceid: {value:""},
+            field: {value: ""},
+            out: {value:""},
+            stat: {value: ""},
+            custom: {value:""},
+            customType: {value:"json"},
+            ack: {value:""}
+        },
+        color: nodeDefaultPaletteColor,
+        inputs: 1,
+        outputs: 1,
+        icon: "serial.png",
+        align: "left",
+        label: function() {
+            return this.name || this._("broker.label.node");
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+            var node = this;
+            var cx = $("#node-input-custom").typedInput({
+                typeField: "#node-input-customType",
+                types: ["json","jsonata"],
+                type: "json"
+            })
+            // setup colors palette...
+            var crSelect = $("#node-input-colorRef");
+            var pSelect = $("#node-input-palette");
+            function updatePalette(palette) {
+                var colors = RED.nodes.node(palette)?.colors || nodeDefaultPalette.colors;
+                crSelect.empty();
+                colors.forEach(c=>crSelect[0].add(new Option(`${c.ref} (${c.fill})`,c.ref)))
+            };
+            updatePalette(node.palette);
+            crSelect.val(node.colorRef||crSelect.val()).change();
+            pSelect.on("change",function() {
+                if (node.palette===pSelect.val()) return;
+                updatePalette(pSelect.val());
+            });
+            // set default mode and respective property selects...
+            var showAll = (props)=>props.forEach(p=>$(`#node-${p}`).show());
+            var hideAll = (props)=>props.forEach(p=>$(`#node-${p}`).hide());
+            var modeSelect = $("#node-input-mode");
+            modeSelect.on("change",function(){
+                switch (modeSelect.val()) {
+                    case 'simple':
+                        showAll(['tag','ceid','topic','out','stat','ack','msg-create','msg-process']);
+                        hideAll(['custom','field']);
+                        break;
+                    case 'custom': 
+                        hideAll(['tag','ceid','topic','ack']);
+                        showAll(['custom','field','out','stat','msg-create','msg-process']);
+                        break;
+                    case 'bypass': 
+                        hideAll(['tag','ceid','topic','out','stat','ack','field','custom','msg-create','msg-process']);
+                        break;
+                };
+            })
+            modeSelect.val(this.mode || 'simple');
+
+            // add handlers for field tips...
+            var addTipHandlers = (sel,tip)=>{
+                try {
+                    $(sel).on('focus', function () { $(tip).show(); });
+                    $(sel).on('blur', function () { $(tip).hide(); });
+                } catch(e) { console.error(sel+': ',e)}
+            };
+            addTipHandlers("#node-input-connection","#tip-connection");
+            addTipHandlers("#node-input-palette","#tip-palette");
+            addTipHandlers("#node-input-colorRef","#tip-color");
+            addTipHandlers("#node-input-mode","#tip-mode");
+            addTipHandlers("#node-input-tag","#tip-tag");
+            addTipHandlers("#node-input-ceid","#tip-id");
+            addTipHandlers("#node-input-field","#tip-field");
+            addTipHandlers("#node-input-ack","#tip-ack");
+            addTipHandlers("#node-custom input.red-ui-typedInput-input","#tip-custom");
+            addTipHandlers("#node-input-topic","#tip-topic");
+            addTipHandlers("#node-input-out","#tip-out");
+            addTipHandlers("#node-input-stat","#tip-stat"); 
+        },
+        oneditsave: function() {
+            var node = this;
+            var transport = RED.nodes.node(node.connection)?.transport;
+            if (transport==='cootie') node.agent = $("input:radio[name='node-input-agent']:checked").val();
+            var colors = RED.nodes.node($("#node-input-palette").val())?.colors || nodeDefaultPalette.colors;
+            node.colorRef = $("#node-input-colorRef").val();
+            var color = colors.filter(c=>c.ref===node.colorRef)[0]?.fill || nodeDefaultPalette.colors[0].fill;
+            $(`#${node.id} > rect`)[0].setAttribute('fill',color);
+        }
+    });
+
+    // Handler code for node redraw to set node color per instance; capture start event with or w/o deploy: true ...
+    var updateNodes = function(e) { console.log(e,RED.nodes.filterNodes({type:'cootie-broker'})); RED.nodes.filterNodes({type:'cootie-broker'}).map(n=>setNodeColor(n)); };
+    RED.events.on("runtime-state",(event)=>{ if (event.state==='start') updateNodes(event); });
+    RED.events.on("workspace:change",(event)=>{ setTimeout(updateNodes,100); });
+    //RED.events.DEBUG = true;
+})();
+</script>
+
+ 
+
