@@ -159,7 +159,7 @@ def process_pending_actions(glob):
 
 
 #### main code ####
-print("Initialization...")
+print("\nInitialization...")
 if not load_definition(glob): raise RuntimeError("Initialization failed!")
 print("Initialization complete!")
     

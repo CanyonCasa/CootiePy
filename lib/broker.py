@@ -78,9 +78,13 @@ class IO:
                 if self.verbose: print(f"Adding driver: {obj['name']}")
                 if driver=='OneWire':
                     self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
-                    self.instances[obj['name']] = obj['interface']
+                    self.instances[obj['name']] = self.interfaces[obj['name']]
                 elif driver=='Analog':
                     self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
+                elif driver=='Digital':
+                    self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
+                elif driver=='PWM':
+                    self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
                 else:
                     print(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
             elif 'interface' in obj:

@@ -12,6 +12,9 @@ Wrapper for a OneWireBus to queue and process messages
 #__repo__ = "https://github.com/canyoncasa/OneWire.git"
 
 import board
+from analogio import AnalogIn, AnalogOut
+import digitalio
+import pwmio
 from simpleq import Queue
 from onewire import OneWireBus
 import onewire_temps, onewire_ports, onewire_other
@@ -19,7 +22,6 @@ try:
     import onewire_user
 except:
     pass
-from analogio import AnalogIn, AnalogOut
 
 
 class OneWireDriver:
@@ -37,8 +39,6 @@ class OneWireDriver:
         if not 'pin' in self.params:
             raise 'OneWireDriver definition requires a pin parameter!'
         self.bus = OneWireBus(getattr(board,self.params['pin']))
-        device = self.bus.define_device(None)
-        self.instances = [{'cfg':{'name':self.name}, 'address':'','device':device}]
         failed = self.bus.status(cfg.get('debug'))
         if failed:
             print(f"ERROR: OneWireDriver[{self.name}] bus error")
@@ -106,10 +106,9 @@ class OneWireDriver:
 
 class AnalogDriver:
 
-    def __init__(self, cfg, verbose=false):
+    def __init__(self, cfg, verbose=False):
         self.cfg = cfg
         self.verbose = verbose
-        self.params = cfg['params']
         self.name = cfg['name']
         self.instances = []
         self.aliases = {}
@@ -123,9 +122,17 @@ class AnalogDriver:
         instance = {'cfg': io, 'name': name, 'pin':pin, 'range':params.get('range',3.3), 
             'bias':params.get('bias',0.0), 'units':params.get('units'), 'init': params.get('init')}
         if instance['init']==None:
-            instance['input'] = AnalogIn(instance['pin'])
+            try:
+                instance['input'] = AnalogIn(instance['pin'])
+            except:
+                print(f"WARN: Analog input not supported for {instance['name']}, pin: {instance['pin']}!")
+                return None
         else:
-            instance['output'] = AnalogOut(instance['pin'])
+            try:
+                instance['output'] = AnalogOut(instance['pin'])
+            except:
+                print(f"WARN: Analog output not supported for {instance['name']}, pin: {instance['pin']}!")
+                return None
             self.output(instance,instance['init'])
         if self.verbose: print(f"AnalogDriver instance: {instance}")
         self.instances.append(instance)
@@ -140,11 +147,11 @@ class AnalogDriver:
 
     def handler(self, msg):
         index = self.aliases.get(msg['id'])
-        if not index:
+        print(f"{index}: {self.aliases}")
+        if index==None:
             return {'tag': "err", 'err': f"NO defined Analog instance: {msg['id']}"}
         instance = self.instances[index]
         if 'out' in msg:
-            
             result = self.output(instance,msg['out'])
         else:
             result = self.input(instance)
@@ -169,3 +176,112 @@ class AnalogDriver:
         raw = instance['input'].value
         value = (raw /65536) * instance['range'] + instance['bias']
         return {'raw': raw, 'value': value, 'units': instance['units']}
+
+class DigitalDriver:
+
+    def __init__(self, cfg, verbose=False):
+        self.cfg = cfg
+        self.verbose = verbose
+        self.name = cfg['name']
+        self.instances = []
+        self.aliases = {}
+
+    def createInstance(self, io, aliases):
+        params = io.get('params',{})
+        if not 'pin' in params:
+            raise 'Digital instance requires a pin parameter per instance!'
+        name = io.get('name',params['pin'])
+        pin = getattr(board,params['pin'])
+        instance = {'cfg': io, 'name': name, 'pin':pin, 'term':params.get('term',"").upper(),
+            'init': str(params.get('init','Z')).upper(), 'io': None}
+        try:
+            instance['io'] = DigitalInOut(instance['pin'])
+            if instance['init']=="Z":
+                instance['io'].direction = digitalio.Direction.INPUT
+                instance['io'].pull = None
+                if instance['term']=="UP": instance['io'].pull = digitalio.Pull.UP
+                if instance['term']=="DOWN": instance['io'].pull = digitalio.Pull.DOWN
+            else:
+                instance['io'].direction = digitalio.Direction.OUTPUT
+                instance['io'].value = bool(int(instance['init']))
+                instance['io'].DriveMode = digitalio.DriveMode.PUSH_PULL
+                if instance['term']=="OD": instance['io'].DriveMode = digitalio.DriveMode.OPEN_DRAIN
+        except:
+            mode = ('output','input')[instance['init']=="Z"]
+            print(f"WARN: Digital {mode} not supported for {instance['name']}, pin: {instance['pin']}!")
+            return None
+        if self.verbose: print(f"DigitalDriver instance: {instance}")
+        self.instances.append(instance)
+        for a in aliases:
+            exists = self.aliases.get(a)
+            if exists:
+                print(f"WARN: Digital instance alias '{a}' exists; redefining alias")
+            else:
+                if self.verbose: print(f"Creating Digital instance '{a}' reference")
+            self.aliases[a] = len(self.instances) - 1
+        return self.instances[len(self.instances) - 1]
+
+    def handler(self, msg):
+        index = self.aliases.get(msg['id'])
+        print(f"{index}: {self.aliases}")
+        if index==None:
+            return {'tag': "err", 'err': f"NO defined Digital instance: {msg['id']}"}
+        instance = self.instances[index]
+        if 'out' in msg: instance['io'].value = bool(int(msg['out']))
+        msg['value'] = instance['io'].value
+        return msg
+
+    def poll(self):
+        pass
+
+class PWMDriver:
+
+    def __init__(self, cfg, verbose=False):
+        self.cfg = cfg
+        self.verbose = verbose
+        self.name = cfg['name']
+        self.instances = []
+        self.aliases = {}
+
+    def createInstance(self, io, aliases):
+        params = io.get('params',{})
+        if not 'pin' in params:
+            raise 'PWM instance requires a pin parameter per instance!'
+        name = io.get('name',params['pin'])
+        pin = getattr(board,params['pin'])
+        instance = {'cfg': io, 'name': name, 'pin':pin, 'dc':params.get('dc',0),
+            'freq': params.get('freq',100)}
+        try:
+            instance['pwm'] = pwmio.PWMOut(instance['pin'])
+            instance['pwm'].duty_cycle = self.dutycycle(instance['dc'])
+            instance['pwm'].frequency = instance['freq']
+        except:
+            print(f"WARN: PWM not supported for {instance['name']}, pin: {instance['pin']}!")
+            return None
+        if self.verbose: print(f"PWMDriver instance: {instance}")
+        self.instances.append(instance)
+        for a in aliases:
+            exists = self.aliases.get(a)
+            if exists:
+                print(f"WARN: PWM instance alias '{a}' exists; redefining alias")
+            else:
+                if self.verbose: print(f"Creating PWM instance '{a}' reference")
+            self.aliases[a] = len(self.instances) - 1
+        return self.instances[len(self.instances) - 1]
+
+    def handler(self, msg):
+        index = self.aliases.get(msg['id'])
+        print(f"{index}: {self.aliases}")
+        if index==None:
+            return {'tag': "err", 'err': f"NO defined PWM instance: {msg['id']}"}
+        instance = self.instances[index]
+        if 'dc' in msg: instance['pwm'].duty_cycle = self.dutycycle(msg['dc'])
+        if 'freq' in msg: instance['pwm'].frequency = msg['freq']
+        
+        return msg
+
+    def poll(self):
+        pass
+
+    def dutycycle(self,dc):
+        return int(2**16 * dc / 100)

@@ -17,15 +17,18 @@
         },
         {
             "driver": "Analog",
-            "debug": true,
-            "name": "analog"
+            "name": "analog",
+            "debug": true
         },
         {
             "driver": "Digital",
             "name": "digital",
-            "params": {
-                "test": {"pin":"D3", "init": 0}
-            }
+            "debug": true
+        },
+        {
+            "driver": "PWM",
+            "name": "pwm",
+            "debug": true
         },
         {
             "interface": "1wire",
@@ -52,20 +55,21 @@
         },
         {
             "interface": "analog",
-            "desc": "Input ADC",
-            "name": "ch2",
-            "params": {"pin":"A2", "range":3.3, "bias": 0, "units":"V"}
-        },
-        {
-            "interface": "analog",
-            "desc": "Output DAC",
-            "name": "ch0",
-            "params": {"pin":"A0", "range":3.3, "bias": 0, "units":"V", "init": 0}
+            "desc": "Loop Pressure",
+            "name": "pressure",
+            "params": {"pin":"A0", "range":3.3, "bias": 0, "units":"V"}
         },
         {
             "interface": "digital",
             "desc": "Test output",
-            "name": "test"
+            "name": "test",
+            "params": {"pin":"D1", "term":"up", "init": 1}
+        },
+        {
+            "interface": "pwm",
+            "desc": "Fan driver",
+            "name": "fan",
+            "params": {"pin":"D2", "dc":0, "freq": 1000}
         }
     ]
 }
