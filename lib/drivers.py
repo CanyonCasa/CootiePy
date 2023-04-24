@@ -11,6 +11,7 @@ Wrapper for a OneWireBus to queue and process messages
 #__version__ = "0.0.0-auto.0"
 #__repo__ = "https://github.com/canyoncasa/OneWire.git"
 
+import json
 import board
 from analogio import AnalogIn, AnalogOut
 import digitalio
@@ -43,6 +44,8 @@ class OneWireDriver:
         if failed:
             print(f"ERROR: OneWireDriver[{self.name}] bus error")
         else:
+            device = self.bus.define_device(None,{})    # default OneWire Device (bus)
+            self.instances.append({ 'cfg': {}, 'address': None, 'device': device }) # add bus as intial instance
             if self.cfg.get('debug'):
                 found = self.bus.scan()
                 for f in found:
@@ -78,12 +81,14 @@ class OneWireDriver:
         # process pending actions...
         if not self.active and self.q.available:
             self.active = self.q.pull()
-            #print(f"active: {self.active}")
         if self.active:
-            instance = self.instances[self.aliases[self.active['id']]]
-            action = self.active.get('action',instance['device'].TYPE)
-            #print(f"ACTIVE INSTANCE: {instance}")
-            #print(f"action: {action}")
+            try:
+                ref = self.aliases.get(self.active['id'],0)
+                instance = self.instances[ref]
+                action = self.active.get('action',instance['device'].TYPE)
+            except Exception as ex:
+                print(f"Exception: {ex}")
+                return None
             if action=='temperature':
                 units = self.active.get('units',instance['device'].units)
                 temp = instance['device'].temperature(units)
@@ -91,18 +96,31 @@ class OneWireDriver:
                 return packet({'temperature':temp, 'units': units})
             # if busy, return None
             if self.bus.busy:
-                print("busy...")
+                if self.verbose: print("busy...")
                 return None
             else:
-                print("not busy...")
                 if action=='bus':
-                    status = instance['device'].bus.status()
-                    scan = instance['device'].bus.scan()
-                    #tmp = type(self.active)(self.active).update({'temperature':temp})
-                    return packet({'status': status, 'scan': scan})
-                pass
-        #return any msgs
-        pass
+                    family = self.active.get('family')
+                    status = instance['device'].bus.status(self.active.get('dump'))
+                    scan = None if status else instance['device'].search(family)
+                    existing = {}
+                    known = {}
+                    unknown = []
+                    for i in self.instances:
+                        sn = None if not i['address'] else i['address']['sn']
+                        if sn:
+                            name = i['cfg'].get('name',"unnamed")
+                            existing[sn] = name
+                    if scan:
+                        for x in scan:
+                            x['rom'] = str(x['rom'])
+                            if self.verbose: print(f"bus scan found: {x['sn']}")
+                            k = existing.get(x['sn'],None)
+                            if k:
+                                known[x['sn']] = k
+                            else:
+                                unknown += [x['sn']]
+                    return packet({'status': status, 'scan': scan, 'known': known, 'unknown': unknown })
 
 class AnalogDriver:
 
@@ -147,7 +165,6 @@ class AnalogDriver:
 
     def handler(self, msg):
         index = self.aliases.get(msg['id'])
-        print(f"{index}: {self.aliases}")
         if index==None:
             return {'tag': "err", 'err': f"NO defined Analog instance: {msg['id']}"}
         instance = self.instances[index]
@@ -223,7 +240,6 @@ class DigitalDriver:
 
     def handler(self, msg):
         index = self.aliases.get(msg['id'])
-        print(f"{index}: {self.aliases}")
         if index==None:
             return {'tag': "err", 'err': f"NO defined Digital instance: {msg['id']}"}
         instance = self.instances[index]
@@ -271,7 +287,6 @@ class PWMDriver:
 
     def handler(self, msg):
         index = self.aliases.get(msg['id'])
-        print(f"{index}: {self.aliases}")
         if index==None:
             return {'tag': "err", 'err': f"NO defined PWM instance: {msg['id']}"}
         instance = self.instances[index]

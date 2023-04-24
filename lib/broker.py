@@ -78,7 +78,10 @@ class IO:
                 if self.verbose: print(f"Adding driver: {obj['name']}")
                 if driver=='OneWire':
                     self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
-                    self.instances[obj['name']] = self.interfaces[obj['name']]
+                    self.instances[obj['name']] = obj['name']
+                    print(f"Onewire... {obj['name']}")
+                    print(self.interfaces)
+                    print(self.instances)
                 elif driver=='Analog':
                     self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
                 elif driver=='Digital':
@@ -110,10 +113,10 @@ class IO:
         instance = self.instances.get(msg['id'])
         interface = self.interfaces.get(instance)
         try:
-            if self.verbose: print(f"IO.handle: id->{id}, instance->{instance}, interface->{interface}")
+            if self.verbose: print(f"IO.handle: id->{msg['id']}, instance->{instance}, interface->{interface}")
             return interface.handler(msg)
-        except:
-            print(f"ERROR[IO.handle]: id->{id}, instance->{instance}, interface->{interface}")
+        except Exception as ex:
+            print(f"ERROR[{type(ex).__name__}]: broker[IO.handle]: {instance}, {interface}")
             return None
 
     def identity(self, cfg):

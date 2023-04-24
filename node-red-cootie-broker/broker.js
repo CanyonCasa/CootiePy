@@ -76,7 +76,8 @@ module.exports = function(RED) {
                     // define root output packet; precedence: msg.payload if object, id only if defined, custom or empty...
                     var [packet,src] = (node.mode==='bypass') ? [msg,'msg'] :
                         (typeof(msg.payload)==='object') ? [msg.payload,'payload'] : 
-                        node.ceid ? [{id: node.ceid},'ID'] : custom ? [custom,'custom'] : [{},'default'];
+                        node.mode==='simple' ? [{id: node.ceid},'simple'] : 
+                        node.mode==='custom' ? [custom,'custom'] : [{},'default'];
                         node.cntn.debug(`initial request packet[${src}]: ${JSON.stringify(packet)}`);
                         node.cntn.debug(`node[${node.evt}]: ${node.mode}`);
                     if (node.mode!=='bypass') {

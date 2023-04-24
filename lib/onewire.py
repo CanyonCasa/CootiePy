@@ -7,7 +7,6 @@ Implements a full 1-Wire bus protocol supporting an extendible set of devices
 OneWireBus includes direct interface to low level reset, bit read, and bit 
 write operations of the core onewireio module, as well as higher level-byte 
 and block (i.e. bytearray) read/write operations and device discovery (scan).
-
 See readme for details 
 
 * Author(s): CanyonCasa
@@ -18,47 +17,65 @@ See readme for details
 
 from microcontroller import Pin
 import onewireio
+import digitalio
 from time import monotonic as mark, sleep
 
 
 class OneWireBus:
     """A class to represent a 1-Wire bus/pin."""
-
     # OneWire bus commands...
     SEARCH_ROM = 0xF0
     REGISTERED = {}     # Holds defined device types used to auto assign found devices
 
     def __init__(self, pin: Pin) -> None:
-        self.io = onewireio.OneWire(pin)
-        self.readbit = self.io.read_bit
-        self.writebit = self.io.write_bit
-        self.reset = self.io.reset
+        self.pin = pin
+        self.io = onewireio.OneWire(self.pin)
         self.timex = None
+
+    # reset, read_bit, and write_bit functions wrapped because testing bus reassigns io
+    def reset(self, test: bool=False) -> bool:
+        """Perform a bus reset"""
+        # patch until reset stuck low fix to onewireio reset 
+        if test:
+            self.io.deinit()
+            x = digitalio.DigitalInOut(self.pin)
+            state = x.value
+            x.deinit()
+            self.io = onewireio.OneWire(self.pin)
+            if not state:
+                return True # bus stuck low failure
+        return self.io.reset()
+
+    def readbit(self) -> bool:
+        """Reads a single bit from the bus"""
+        return self.io.read_bit()
+
+    def writebit(self,bit) -> None:
+        """Writes a single bit to bus"""
+        self.io.write_bit(bit) 
 
     @property
     def busy(self):
         """Reports whether or not bus is available or waiting on a conversion"""
-
         return not self.timex==None
 
     @property
     def ready(self):
         """Reports whether or not a pending conversion has completed and clears busy flag if done"""
-
         if mark() > self.timex:
             self.timex = None
         return self.timex==None
 
     def hold(self,wait=None):
         """Defines a hold time for initializing busy state"""
-
         if wait:
             self.timex = mark() + wait
 
     @staticmethod
     def crc8(data: bytearray) -> int:
         """Perform the 1-Wire CRC check on the provided data. Returns 0 for successful 8 byte crc"""
-
+        if data==None:
+            return None
         crc = 0
         for byte in data:
             crc ^= byte
@@ -71,9 +88,16 @@ class OneWireBus:
         return crc
 
     @staticmethod
+    def crc8snx(data: bytearray) -> int:
+        """Perform a 1-wire CRC check on a SN with masking."""
+        if OneWireBus.REGISTERED[data[0]]:
+            if hasattr(OneWireBus.REGISTERED[data[0]],'MASK'):
+                data[1] = OneWireBus.REGISTERED[data[0]].MASK
+        return OneWireBus.crc8(data)
+
+    @staticmethod
     def crc16i(data: bytearray, seed: int = 0, invert: bool=True, as_bytes: bool=True):
         """Generates CRC16; inverted, as bytearray, by default for appending to data block"""
-
         oddparity = [0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0]
         crc = seed
         for i in range(len(data)):
@@ -93,20 +117,17 @@ class OneWireBus:
     @staticmethod
     def crc16check(data: bytearray):
         """Checks a data block with an inverted crc16 and return zero for valid data"""
-
         crc = OneWireBus.crc16i(data, 0, False, False)
         return crc ^ 0xB001
 
     @staticmethod
     def bytes2hex(b: bytearray) -> str:
         """Converts a bytearray to defacto human readable hex string format"""
-
         return '' if not b else " ".join(list(map(lambda x: "{:02x}".format(x).upper(), b)))
 
     @staticmethod
     def bytes4addr(address: any) -> bytearray:
         """Converts an address of various forms to rom bytearray for I/O calls"""
-
         if type(address)==dict:    # assume direct from scan function
             return address['rom']
         elif type(address)==bytearray:
@@ -115,15 +136,15 @@ class OneWireBus:
             astr = address.replace(' ','').replace('-','')
             a = bytearray([int(astr[i:i+2],16) for i in range(0,len(astr),2)])
             if len(a)==7:
-                a.append(OneWireBus.crc8(a))
+                a.append(OneWireBus.crc8snx(a))
             return a
         else:
-            print('unknown address type:', address, type(address))
+            print('WARN[OneWireBus.bytes4addr]: unknown address type =>', address, type(address))
             return None
 
+    @staticmethod
     def frmt_addr(rom) -> dict:
         """Converts a rom bytearray into multiple address forms for display, etc"""
-
         family = rom[0]
         sn = OneWireBus.bytes2hex(rom)    # defacto hex string
         hxx = sn.replace(' ','')    # hexstring, no spaces
@@ -133,9 +154,8 @@ class OneWireBus:
 
     def define_device(self, address, params: dict={}, dev_class=None):
         """Associates a specific device with its bus"""
-
         if not address:
-            return Device(self,None,None)
+            return Device(self,None,params)
         abytes = self.bytes4addr(address)
         if not abytes: return None
         family = abytes[0]
@@ -144,7 +164,6 @@ class OneWireBus:
 
     def read(self, n: int) -> bytearray:
         """Reads n number of bytes from the bus and returns as a bytearray."""
-
         buf = bytearray(n) if type(n)==int else n   # accomodate a buffer or buffer size
         for i in range(n):
             buf[i] = self.readbyte()
@@ -152,43 +171,60 @@ class OneWireBus:
 
     def readbyte(self) -> int:
         """Read a single byte from the data bus"""
-
         val = 0
         for i in range(8):
-            val |= self.io.read_bit() << i
+            val |= self.readbit() << i
         return val
 
     @staticmethod
     def register(family: int, device_class):
         """Adds a device class to the list of registered device classes"""
-
         OneWireBus.REGISTERED[family] = device_class
 
-    def scan(self) -> list:
+    def scan(self,family=None) -> list:
         """Scan bus for devices present and return a list of valid multi-format addresses for each."""
-
+           # if family defined, searches only for devices matching that family.
+           # searches "zero branch" first; i.e. left-to-right binary tree
+           # walks back conflicts from MSB to LSB
         addresses = []
-        diff = 65
-        rom = None
-        while True:
-            rom, diff = self._search_rom(rom, diff)
-            if rom==None: return addresses
-            if not self.crc8(rom):  # rom as bytearray; zero crc for a valid address
-                addresses.append(self.frmt_addr(rom))
-                #print(f'FOUND: OneWire ROM[{rom}]')
-            else:
-                print(f'ERROR: OneWire ROM[{rom}] failed CRC! Device ignored')
-                return None
-            if not diff:
+        seed = bytearray([0]*8) # start with all zeros
+        if family:  # override first byte with family if defined
+            seed[0] = int(family,16)
+        while True: # loop until no conflicts remain...
+            rom, conflicts = self._search_rom(seed) # perform a single pass to discover a single device
+            if rom==None:
                 break
+            if conflicts==None: # conflicts==None for errors!
+                print(f"ERROR[OneWireBus.scan]: NO devices present of stuck bus!")
+                break
+            if not self.crc8snx(rom): # rom as bytearray; zero crc for a valid address
+                dev = self.frmt_addr(rom)
+                addresses.append(dev)
+            else:
+                print(f"ERROR[OneWireBus.scan]: failed CRC! Device {dev['sn']} ignored")
+                break
+            if not len(conflicts):  # no more conflicts, done!
+                break
+            else:
+                while len(conflicts):
+                    (byte,bit) = conflicts[-1]  # last conflict (i.e. closest to MSB)
+                    if family and byte==0: # no more devices within family
+                        return addresses
+                    sbit = seed[byte] & 1<<bit and 1
+                    if sbit==0: # 1 path not yet taken, toggle seed bit and try again
+                        seed[byte] ^= 1<<bit
+                        break   # conflicts loop
+                    else:
+                        conflicts.pop() # 1 branch taken already, try an earlier conflict
+                if len(conflicts)==0:   # taking 1 branch if len>0, else exhausted conflicts
+                    break
         return addresses
 
     def status(self,dump=False):
         """Reports on bus health; optionally dumps to console"""
-
-        r = self.reset()
+        r = self.reset(True)
         if dump:
-            print(f"Reset: {('Bus OK', 'Bus fault')[r]}")
+            print(f"Reset: {('Bus OK', 'Bus fault/no devices')[r]}")
             print('Registered devices...')
             for f in sorted(OneWireBus.REGISTERED.keys()):
                 print(f'  {f:02}:   {OneWireBus.REGISTERED[f].DESC}')
@@ -196,51 +232,44 @@ class OneWireBus:
         
     def write(self, buf: bytearray) -> None:
         """Write the bytes from ``buf`` to the bus."""
-
         for i in range(len(buf)):
             self.writebyte(buf[i])
 
     def writebyte(self, value: int) -> None:
         """Writes a single byte of data to the bus"""
-
         for i in range(8):
             bit = (value >> i) & 0x1
-            self.io.write_bit(bit)
+            self.writebit(bit)
 
-    def _search_rom(self, l_rom: bytearray, diff: int) -> tuple: # (bytearray, int)
-        """Internal routine used by scan for device discovery"""
-
-        if self.io.reset():    # False when any devices present
-            return None, 0
+    def _search_rom(self, seed: bytearray) -> tuple: # (bytearray, array)
+        """Internal routine used by scan for device discovery; works like DS2480B w/o interleaving"""
+        if self.reset(True):    # False when any devices present; tests for stuck bus
+            return None, None
+        # set search mode: read true bit; read complement bit; write true bit or seed bit for a conflict
         self.writebyte(OneWireBus.SEARCH_ROM)
-        if not l_rom:
-            l_rom = bytearray(8)
         rom = bytearray(8)
-        next_diff = 0
-        i = 64
+        conflicts = []
         for byte in range(8):
             r_b = 0
             for bit in range(8):
-                # accelerate mode read true bit, then false bit, then write desired
-                b = self.readbit()  # 1st address bit read
-                if self.readbit():  # 2nd address bit read
+                n = byte*8 + bit
+                sb = seed[byte] & 1<<bit and 1  # seed bit
+                b = self.readbit()  # 1st address bit read (true)
+                if self.readbit():  # 2nd address bit read (complement)
                     if b:  # 11: there are no devices or there is an error on the bus
-                        return None, 0
+                        return None, None
                 else:
-                    if not b:  # 00: collision, two devices with different bit meaning
-                        if diff > i or ((l_rom[byte] & (1 << bit)) and diff != i):
-                            b = 1
-                            next_diff = i
+                    if not b:  # 00: collision, two devices with different bit states
+                        conflicts += [(byte,bit)]    # mark conflict
+                        b = sb  # replace true bit with seed
                 self.writebit(b)
                 r_b |= b << bit
-                i -= 1
             rom[byte] = r_b
-        return rom, next_diff
+        return rom, conflicts
 
 
 class Device:
     """A base class to represent any single device on the 1-Wire bus, generally overridden by specific class."""
-
     TYPE = 'bus'
     DESC = 'Generic device, supports bus search'
     FAMILY = None
@@ -269,8 +298,9 @@ class Device:
                 self.bus.write([Device.MATCH_ROM])
                 self.bus.write(self.address)
     
-    def search(self):
-        return self.bus.scan(self.family)
+    def search(self,family=None):
+        found = self.bus.scan(family if family else self.family)
+        return found
 
     def info(self):
         return { 'address': self.address, 'family':self.family, 'sn': self.sn, 'desc': self.desc }
