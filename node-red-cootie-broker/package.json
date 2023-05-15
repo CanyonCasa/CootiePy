@@ -1,6 +1,6 @@
 {
   "name": "@canyoncasa/node-red-cootie-broker",
-  "version": "0.7.1",
+  "version": "0.7.11",
   "description": "Node-red connection broker for communication with remote I/O broker",
   "main": "broker.js",
   "node-red": {

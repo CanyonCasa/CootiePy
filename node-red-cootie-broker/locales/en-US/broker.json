@@ -4,7 +4,7 @@
             "parse": "JSON parse error",
             "log": "see log...",
             "missing-conf": "missing connection config",
-            "process": "Message processing error: __error__",
+            "processing": "Message processing error: __error__",
             "transport": "__transport__ not supported"
         },
         "label": {
@@ -34,6 +34,7 @@
         "mode": {
             "simple": "Simple (ID based message)",
             "custom": "Custom (JSON/JSONata)",
+            "payload": "Payload (Use msg.payload)",
             "bypass": "Bypass (Complete message)"
         },
         "placeholder": {

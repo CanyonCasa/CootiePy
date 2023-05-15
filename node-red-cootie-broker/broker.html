@@ -299,6 +299,7 @@
         <select id="node-input-mode">
             <option value="simple" data-i18n="broker.mode.simple"></option>
             <option value="custom" data-i18n="broker.mode.custom"></option>
+            <option value="payload" data-i18n="broker.mode.payload"></option>
             <option value="bypass" data-i18n="broker.mode.bypass"></option>
         </select>
     </div>
@@ -368,7 +369,6 @@
         node.colorRef = ref;
         var color = colors.filter(c=>c.ref===ref)[0]?.fill || nodeDefaultPalette.colors[0].fill;
         var element = ($(`#${node.id} > rect`)||[])[0];
-        console.log('node element',node.id,!!element)
         if (element) element.setAttribute('fill',color);
     }
 
@@ -437,8 +437,10 @@
                         hideAll(['tag','ceid','topic','ack']);
                         showAll(['custom','field','out','stat','msg-create','msg-process']);
                         break;
+                    case 'payload':
                     case 'bypass': 
-                        hideAll(['tag','ceid','topic','out','stat','ack','field','custom','msg-create','msg-process']);
+                        hideAll(['tag','ceid','topic','ack','field','custom','msg-create']);                      
+                        showAll(['out','stat','msg-process']);
                         break;
                 };
             })
@@ -476,7 +478,7 @@
     });
 
     // Handler code for node redraw to set node color per instance; capture start event with or w/o deploy: true ...
-    var updateNodes = function(e) { console.log(e,RED.nodes.filterNodes({type:'cootie-broker'})); RED.nodes.filterNodes({type:'cootie-broker'}).map(n=>setNodeColor(n)); };
+    var updateNodes = function(e) { RED.nodes.filterNodes({type:'cootie-broker'}).map(n=>setNodeColor(n)); };
     RED.events.on("runtime-state",(event)=>{ if (event.state==='start') updateNodes(event); });
     RED.events.on("workspace:change",(event)=>{ setTimeout(updateNodes,100); });
     //RED.events.DEBUG = true;

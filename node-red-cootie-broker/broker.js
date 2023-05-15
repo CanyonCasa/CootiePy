@@ -33,7 +33,7 @@ module.exports = function(RED) {
         this.name = ncfg.name;
         this.mode = ncfg.mode;
         this.tag = ncfg.tag;
-        this.evt = ncfg.tag || ncfg.id;
+        this.handle = ncfg.tag || ncfg.id;  // node id property, not the msg defined id
         this.topic = ncfg.topic;
         this.ceid = ncfg.ceid;              // cootie endpoint ID; ceid avoids conflict with reserved ncfg.id (node.id)
         this.field = ncfg.field;
@@ -43,7 +43,10 @@ module.exports = function(RED) {
         this.custom = ncfg.custom
         this.customType = ncfg.customType
         // node methods...
-        this.parser = (template, obj)=>Function(...Object.keys(obj), `return \`${template}\``)(...Object.values(obj));
+        this.parser = (template, obj)=>{
+            try { return Function(...Object.keys(obj), `return \`${template}\``)(...Object.values(obj)); }
+            catch(e) { return '???'; }
+        };
         this.report = (function(node) { // wrapper for status to allow updating individual fields
             var rpt = { fill: 'grey', shape: "ring", text: "" };
             return (status) => {
@@ -57,13 +60,15 @@ module.exports = function(RED) {
         // functional definition...
         if (node.cfgConnection) {
             // establish transport for this node
-            node.cntn = cntnPool.get(this.cfgConnection,node.evt); // --> node.cntn.evt
+            node.cntn = cntnPool.get(this.cfgConnection,node.handle); // --> node.cntn.handle
             // process msg payloads...
             node.on("input", async function(msg) {
                 if (!msg.hasOwnProperty("payload")) return;
-                async function jsonataParse(node,msg,value) {
-                    var expr = RED.util.prepareJSONataExpression(value,node);
-                    return new Promise(resolve=>{ RED.util.evaluateJSONataExpression(expr,msg,(result)=>resolve(result)) });
+                async function jsonataParse(node,template,msg) {
+                    var expr = RED.util.prepareJSONataExpression(template,node);
+                    return new Promise(resolve=>{ 
+                        RED.util.evaluateJSONataExpression(expr,msg,(err,result)=>{ return resolve(result)});
+                    });
                 };
                 node.msgTopic = msg.topic;
                 node.cntn.debug("incoming msg: "+JSON.stringify(msg));
@@ -74,35 +79,36 @@ module.exports = function(RED) {
                         node.cntn.debug(`custom packet eval: ${JSON.stringify(custom)}`);
                     };
                     // define root output packet; precedence: msg.payload if object, id only if defined, custom or empty...
-                    var [packet,src] = (node.mode==='bypass') ? [msg,'msg'] :
-                        (typeof(msg.payload)==='object') ? [msg.payload,'payload'] : 
-                        node.mode==='simple' ? [{id: node.ceid},'simple'] : 
-                        node.mode==='custom' ? [custom,'custom'] : [{},'default'];
+                    var [src,packet] = (node.mode==='bypass') ? ['msg',msg] :
+                        node.mode==='custom' ? ['custom',custom] :
+                        ((node.mode==='payload') && (typeof(msg.payload)==='object')) ? ['payload',msg.payload] :
+                        node.mode==='simple' ? ['simple',{id: node.ceid}] : ['default',{}];
                         node.cntn.debug(`initial request packet[${src}]: ${JSON.stringify(packet)}`);
-                        node.cntn.debug(`node[${node.evt}]: ${node.mode}`);
+                        node.cntn.debug(`node[${node.handle}]: ${node.mode}`);
                     if (node.mode!=='bypass') {
                         // optionally assign scalar payload to packet.field
-                        if (typeof(msg.payload!=='object')&&node.field) packet[node.field] = msg.payload;
+                        if (typeof(msg.payload!=='object') && node.field) packet[node.field] = msg.payload;
                         if (!packet.tag) {
                             if (node.tag) packet.tag = node.tag;
-                            if (!node.tag && packet.id) // id but no tag so create a route alias
-                                if (!node.cntn.alias(packet.id,node.id))    // null means route exists to different return point
+                            if (!packet.tag && packet.id) // id but no tag so create a route alias
+                                if (!node.cntn.alias(packet.id,node.handle))    // null means route exists to different return point
                                     node.warn(`Different existing route for ID[${packet.id}] --> ${node.cntn.alias(packet.id)}`)  
                         };
+                        if (packet.tag && node.handle!==packet.tag) node.cntn.alias(packet.tag,node.handle);
                         if (!packet.ack && node.ack) packet.ack = node.ack;
                     } else {
-                        node.cntn.alias(msg._msgid,node.id);
+                        node.cntn.alias(msg._msgid,node.handle);
                     };
-                    node.cntn.debug(`${node.evt} routes: ${JSON.stringify(node.cntn.alias())}`)
+                    node.cntn.debug(`${node.handle} routes: ${JSON.stringify(node.cntn.alias())}`)
                     node.cntn.talk(packet,(rpt)=>node.report(rpt));
                 } catch (e) {
                     node.error(RED._("broker.errors.processing",{error: e.toString()}));
                 }
             });
             // add listener for this node on its connection to capture return messages...
-            node.cntn.debug(`listening on tag: ${node.evt}`)
-            node.cntn.on(node.evt, function(obj) {
-                node.cntn.debug(`heard[${node.evt}]: ${JSON.stringify(obj)}`);
+            node.cntn.debug(`listening on tag: ${node.handle}`)
+            node.cntn.on(node.handle, function(obj) {
+                node.cntn.debug(`heard[${node.handle}]: ${JSON.stringify(obj)}`);
                 node.send(node.mode==='bypass' ? obj :
                     {topic: node.topic||node.msgTopic, payload: node.out?node.parser(node.out,obj):obj});
                 node.report(node.stat?node.parser(node.stat,obj):[node.report().text,'Ok'].join(' -> '));
@@ -130,7 +136,7 @@ module.exports = function(RED) {
         var connections = {};
         return {
             getAll: function() { return connections; },
-            get:function(ccfg,nodeEvent) {
+            get:function(ccfg,nodeHandle) {
                 // just return the connection object if already defined
                 if (connections[ccfg.id]) { return connections[ccfg.id]; }
                 // create a new connection object...
@@ -153,7 +159,7 @@ module.exports = function(RED) {
                         id: ccfg.id,
                         label: ccfg.config.label,
                         max: parseInt(ccfg.config.max) || 10,
-                        evt: nodeEvent,
+                        handle: nodeHandle,
                         on: function(a,b) { this.tasker.on(a,b); },
                         serial: null,
                         talk: null,
@@ -179,39 +185,39 @@ module.exports = function(RED) {
                         var replied = false;
                         var reply = (e,o) => { if (e) { replied=true; cntn.tasker.emit(e,o); } };
                         cntn.debug(`listen[${cntn.id}]: (${response.length}) ${response.trim()}`);
-                        var rj = {};
+                        var robj = {};  // response object
                         try {
-                            rj = JSON.parse(response);
+                            robj = JSON.parse(response);
                         } catch(e) {
                             RED.log.error(RED._("broker.errors.parse")+": "+e.toString());
                             cntn.debug(`listen error: ${RED._("broker.errors.parse")}`);
-                            rj = {err: true, msg: e.toString(), detail: response};
+                            robj = {err: true, msg: e.toString(), detail: response};
                         }
                         cntn.debug(`cntn listen routes: ${JSON.stringify(cntn.alias())}`)
-                        cntn.debug(`  tag:${rj.tag}, id/alias:${rj.id}/${rj.id?cntn.alias(rj.id):undefined}, `+
-                            `cmd:${rj.cmd}, _msgid:${rj._msgid}`);
-                        console.log('transport:',cntn.transport,'agent:',cntn.config.agent,cntn.transport==='cootie'&&cntn.config.agent==='server')
+                        cntn.debug(`  tag:${robj.tag}/${robj.tag?cntn.alias(robj.tag):undefined}, ` +
+                            `id/alias:${robj.id}/${robj.id?cntn.alias(robj.id):undefined}, cmd:${robj.cmd}, _msgid:${robj._msgid}`);
+                        cntn.debug(`transport: ${cntn.transport}${cntn.config.agent ? ', cootie agent: '+cntn.config.agent:''}`);
                         if (cntn.transport==='cootie') {    // cootie client/server special case
                             if (cntn.config.agent==='server') {
-                                cntn.debug(`cootie server[${cntn.id}]: ${cntn.evt}}`);
-                                return reply(cntn.evt,rj);
+                                cntn.debug(`cootie server[${cntn.id}]: ${cntn.handle}}`);
+                                return reply(cntn.handle,robj);
                             } else {
-                                if (rj._msgid) { // client bypass mode...
-                                    reply(cntn.alias(rj._msgid),rj);
-                                    cntn.debug(`bypass emit[${rj._msgid}]: ${cntn.alias(rj._msgid)}`)
-                                    if (replied) return cntn.alias(rj._msgid,null); // remove _msgid alias, not used again
+                                if (robj._msgid) { // client bypass mode...
+                                    reply(cntn.alias(robj._msgid),robj);
+                                    cntn.debug(`bypass emit[${robj._msgid}]: ${cntn.alias(robj._msgid)}`)
+                                    if (replied) return cntn.alias(robj._msgid,null); // remove _msgid alias, not used again
                                 };
                             };
                         };
                         // note: data may be returned to multiple destinations, such as 'err' and '*'
-                        if (rj.tag) reply(rj.tag, rj);    // defined tag
-                        if (!replied && cntn.alias(rj.id)) reply(cntn.alias(rj.id), rj); // infers no tag, check id alias
+                        if (robj.tag) reply(cntn.alias(robj.tag)||robj.tag, robj);    // defined tag, which may be an alias
+                        if (!replied && cntn.alias(robj.id)) reply(cntn.alias(robj.id), robj); // infers no tag, check id alias
                         // possible copies to special endpoints
-                        if (rj.tag!=='cmd' && rj.cmd) reply('cmd',rj);  // commands, but don't duplicate if tag==='cmd'
-                        if (rj.tag!=='err' && rj.err) reply('err',rj);  // errors, don't duplicate
-                        if (rj.tag!=='ack' && rj.ack) reply('ack',rj);  // ack, don't duplicate
+                        if (robj.tag!=='cmd' && robj.cmd) reply('cmd',robj);  // commands, but don't duplicate if tag==='cmd'
+                        if (robj.tag!=='err' && robj.err) reply('err',robj);  // errors, don't duplicate
+                        if (robj.tag!=='ack' && robj.ack) reply('ack',robj);  // ack, don't duplicate
                         // untagged + system messages catch-all '*' event...
-                        if (!replied || ['cmd','err','ack'].some(f=>rj[f])) cntn.tasker.emit('*', rj);
+                        if (!replied || ['cmd','err','ack'].some(f=>robj[f])) cntn.tasker.emit('*', robj);
                     };
                     cntn.talk = function(packet,callback) {
                         // format packet as JSON with newline termination and send it on its way to broker...
@@ -235,7 +241,7 @@ module.exports = function(RED) {
                     // 
                     if (cntn.transport==='serial') {
                         var olderr = '';
-                        var { serialport, baud, databits, parity, stopbits, timeout } = cntn.config;
+                        var { serialport, baud, databits, label, parity, stopbits, timeout } = cntn.config;
                         var [baudRate,dataBits,stopBits,timeout] = [baud,databits,stopbits,timeout].map(v=>parseInt(v));
                         var portSettings = { path:serialport, baudRate, dataBits, parity, stopBits, autoOpen: true}
                         var setupSerial = function() {
@@ -243,16 +249,14 @@ module.exports = function(RED) {
                                 if (err) {
                                     if (err.toString() !== olderr) {
                                         olderr = err.toString();
-                                        RED.log.error("[serial config:"+cntn.id+"] "+RED._("serial.errors.error",{port:port,error:olderr}), {});
+                                        RED.log.error("[serial config:"+cntn.id+"] "+RED._("serial.errors.error",{port:label,error:olderr}), {});
                                     }
-                                    cntn.timex = setTimeout(function() {
-                                        setupSerial();
-                                    }, timeout);
-                                }
+                                    cntn.timex = setTimeout(function() { setupSerial(); }, timeout);
+                                };
                             });
                             if (!cntn.serial) return;
                             cntn.serial.on('error', function(err) {
-                                RED.log.error("[serial config:"+cntn.id+"] "+RED._("serial.errors.error",{port:port,error:err.toString()}), {});
+                                RED.log.error("[serial config:"+cntn.id+"] "+RED._("serial.errors.error",{port:label,error:err.toString()}), {});
                                 cntn.tasker.emit('closed');
                                 if (cntn.timex) { clearTimeout(cntn.timex); }
                                 cntn.timex = setTimeout(function() { setupSerial(); }, timeout);
