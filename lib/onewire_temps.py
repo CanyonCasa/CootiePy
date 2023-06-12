@@ -13,7 +13,7 @@ from time import sleep
 
 class TemperatureSensor(Device):
 
-    TYPE = 'temperature'
+    CATEGORY = 'temperature'
     TEMP_CONVERT_WAIT = 0.8 # @ 12 bits
     CONVERT_T = 0x44
     RD_SCRATCH = 0xBE
@@ -104,16 +104,3 @@ class DS18X20(TemperatureSensor):
         super().__init__(bus, address, params)
 
 Device.register(DS18X20.FAMILY, DS18X20)
-
-
-### DOES NOT SUPPORT CHAIN FUNCTION AT THIS TIME!
-class DS28EA00(TemperatureSensor):
-    # Device specific definitions
-    FAMILY = 0x42
-    DESC = 'DS28EA00 (0x42) Chainable Temperature Sensor'
-
-    def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
-        params['desc'] = params.get('desc',DS28EA00.DESC)
-        super().__init__(bus, address, params)
-
-Device.register(DS28EA00.FAMILY, DS28EA00)

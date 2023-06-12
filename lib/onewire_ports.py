@@ -13,143 +13,131 @@ from onewire import OneWireBus, Device
 
 class OneWirePort(Device):
 
-    (CAR,CAW,RPR,RAL,PAW) = ('F5','5A','F0','C3','A5')
-    PIO_READ = 0xF5
-    PIO_WRITE = 0x5A
-    
-
-    
-
+    CATEGORY = 'port'
+    PORT_MASK = 0xFF
+    PORT_READ = 0xF5
+    PORT_READ_REG_SEQ = []  # port type specific sequence 
+    PORT_WRITE_REG = 0x5A
+    PORT_INTERLEAVE = False
 
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         super().__init__(bus, address)
     
-    # low level port I/O function to retrieve the RAW (i.e. no inversion handling) port pin states
-    def portIn(self, sn):
-        self.scribe("# call:portIn(%s)" % (sn))
-        family = self.getFamily(sn)
-        mask = 0xFF if family == DS2408 else 0x03
-        sequence = oneWire.CAR + ' FF'
-        self.rst()
-        response = hexsplit(self.send(' '.join((oneWire.MATCHROM,sn,sequence))),2)
-        self.rst()
-        checkOK = self.crc(self.maskSN(''.join(response[1:9])))==0
-        data = mask # default
-        if checkOK:
-            data = int(response[-1],16)
-            if family in (DS2413,DS28EA00):
-                # DS2413 and DS28EA00 latch and port pin bits interleaved
-                data = ((data & 0x04)>>1) + ((data & 0x01))
-        else:
-            self.scribe("# error:portIn")
-            return 0xFFFF
-        return data & mask
-    # retrieves RAW (i.e. no inversion handling) latched port state data
-    def portReadReg(self, sn):
-        self.scribe("# call:portReadReg(%s)" % (sn))
-        family = self.getFamily(sn)
-        mask = 0xFF if family == DS2408 else 0x03
-        if family == DS2408:
-            sequence = oneWire.RPR + ' 89 00 FF'
-        elif family == DS28E04:
-            sequence = oneWire.RPR + ' 21 02 FF'
-        elif family in (DS2413,DS28EA00):
-            sequence = oneWire.CAR + ' FF'
-        else:
-            return None
-        self.rst()
-        response = hexsplit(self.send(' '.join((oneWire.MATCHROM,sn,sequence))),2)
-        self.rst()
-        checkOK = self.crc(self.maskSN(''.join(response[1:9])))==0
-        data = mask # default
-        if checkOK:
-            data = int(response[-1],16)
-            if family in (DS2413,DS28EA00):
-                # DS2413 and DS28EA00 latch and port pin bits interleaved
-                data = ((data & 0x08)>>2) + ((data & 0x02)>>1)
-        else:
-            self.scribe("# error:portReadReg")
-            return 0xFFFF
-        return data & mask
+    # low level port I/O function to retrieve the RAW port pin states (i.e. no inversion handling)
+    def portIn(self, raw=False):
+        self.select()
+        self.bus.write([self.PORT_READ])
+        response = self.bus.read(1)
+        self.bus.reset()    # required to stop command
+        data = response[0]
+        if raw:
+            return data
+        if self.PORT_INTERLEAVE:
+            data = ((data & 0x04)>>1) + ((data & 0x01))
+        return data & self.PORT_MASK
+
+    def portReadReg(self):
+        if self.PORT_INTERLEAVE:
+            data = self.portIn(True)
+            data = ((data & 0x08)>>2) + ((data & 0x02)>>1)
+            return data & self.PORT_MASK
+        self.select()
+        self.bus.write(self.PORT_READ_REG_SEQ)
+        response = self.bus.read(1)
+        self.bus.reset()
+        print(f"portReadReg: ",response)
+        return response[0] & self.PORT_MASK
 
     # sets the RAW (i.e. no inversion handling) port latch state data
-    def portWriteReg(self, sn, data):
-        self.scribe("# call:portWriteReg(%s,0x%02X)" % (sn,data))
-        family = self.getFamily(sn)
-        mask = 0xFF if family == DS2408 else 0x03
-        if type(data)=='str': data = int(data,16) # hex string to decimal
-        # mask data and fill bits
-        data = (data & mask) | (~mask & 0xFF)
-        # write instruction different for DS28EA00
-        sequence = oneWire.PAW if family == DS28EA00 else oneWire.CAW
-        sequence += ' %02X %02X FF FF' % (data,data^0xFF)
-        self.rst()
-        response = hexsplit(self.send(' '.join((oneWire.MATCHROM,sn,sequence))),2)
-        self.rst()
-        checkOK = self.crc(self.maskSN(''.join(response[1:9])))==0
-        if checkOK and (response[-2] == 'AA'):    # valid response.
-            data = int(response[-1],16)
-            if family in (DS2413,DS28EA00):
-                # DS2413 and DS28EA00 latch and port pin bits interleaved
-                data = ((data & 0x08)>>2) + ((data & 0x02)>>1)
-        else:
-            self.scribe("# error:portWriteReg")
-            return 0xFFFF
-        return data & mask
+    def portWriteReg(self, data):
+        # mask data and fill bits...
+        data = (data & self.PORT_MASK) | (~self.PORT_MASK & 0xFF)
+        self.select()
+        self.bus.write([self.PORT_WRITE_REG,data,data^0xFF])
+        response = self.bus.read(2)
+        self.bus.reset()    # required to stop command
+        print(f"portWriteReg: ",response)
+        if not response[0]==0xAA:
+            return None
+        data = response[1]
+        if self.PORT_INTERLEAVE:
+            data = ((data & 0x08)>>2) + ((data & 0x02)>>1)
+        return data & self.PORT_MASK
 
     # high-level DS2408, DS2413, or DS28EA00 port operations with error checking...
     # gets or sets port latch or pin data per operation. Assumes...
-    #   !!! resolves inverting logic operation so that a 1 turns the output ON
+    #   !!! Assumes inverting logic so that a 1 turns the output ON
     #   wIOIN and wIOREG do not change the port 
     #   wIOSET, wIOCLEAR, and wIOTOGGLE operations preserve bits with 0 value and only change 1 bits
     #   wIORESET, wIOOUT do not preserve bits and write all bits of the port, both 0's and 1's.
-    def port(self, sn, op, data=0xFF):
-        self.scribe("# call:port(%s,%s,0x%02X)" % (sn,op,data))
-        family = self.getFamily(sn)
-        if family in (DS2408, DS2413, DS28EA00, DS28E04):
-            REGMASK = 0xFF if family == DS2408 else 0x03
-            if type(data)=='str': data = int(data,16) # hex string to decimal
-            if op == wIORESET:
-                data = self.portWriteReg(sn,REGMASK)
-            elif op == wIOCLEAR:
-                data = self.portWriteReg(sn, data | self.portReadReg(sn))
-            elif op == wIOSET:
-                data = self.portWriteReg(sn, ~data & self.portReadReg(sn))
-            elif op == wIOIN:
-                data = self.portIn(sn)
-            elif op == wIOREG:
-                data = self.portReadReg(sn)
-            elif op == wIOOUT:
-                data = self.portWriteReg(sn, ~data)  ##inverts?
-            elif op == wIOTOGGLE:
-                data = self.portWriteReg(sn, data  ^ self.portReadReg(sn))
-            elif op == wIOPULSE:
-                data = self.portWriteReg(sn, data ^ self.portWriteReg(sn, data  ^ self.portReadReg(sn)))
-            else:
-                self.scribe("# call:port => UNKNOWN port operation[" + sn + "]: " + str(op))
-                return None
-            return REGMASK & ~data
+    def port(self, op, data=0xFF):
+        print(f"op: {op}, data: {data}")
+        if type(data)=='str': data = int(data,16) # hex string to decimal
+        if op == 'RESET':
+            data = self.portWriteReg(self.PORT_MASK)
+        elif op == 'CLEAR':
+            data = self.portWriteReg(data | self.portReadReg())
+        elif op == 'SET':
+            data = self.portWriteReg(~data & self.portReadReg())
+        elif op == 'IN':
+            data = self.portIn()
+        elif op == 'REG':
+            data = self.portReadReg()
+        elif op == 'OUT':
+            data = self.portWriteReg(~data)  # inverts?
+        elif op == 'TOGGLE':
+            data = self.portWriteReg(data ^ self.portReadReg())
+        elif op == 'PULSE':
+            data = self.portWriteReg(data ^ self.portWriteReg(data ^ self.portReadReg()))
         else:
-            self.scribe("# call:port => UNKNOWN port device: " + sn)
             return None
+        return self.PORT_MASK & ~data
+
+    def action(self, info: dict) -> int:
+        """parses input data record into a value and/or action for port call"""
+        try:
+            op = info.get('op')
+            if 'value' in info:     # write directly to port
+                op = op or 'OUT'
+                value = info['value']
+                return { 'op': op,  'operand': value, 'data': self.port(op, value) }
+            if 'channel' in info:
+                op = op or 'TOGGLE'
+                channel = info['channel']
+                if str(channel) in {'0','1','2','3','4','5','6','7'}:
+                    n = int(channel)
+                elif channel in {'a','b','c','d','e','f','g','h'}:
+                    n = 'abcdefgh'.index(channel)
+                else:
+                    return { 'op': 'IN', 'operand': None, 'data': self.portIn() }
+                value = 1 << n
+                return { 'op': op, 'operand': value, 'data': self.port(op, value) }
+            if not op in {'IN','REG'}:
+                op = 'IN'
+            return { 'op': op, 'operand': None, 'data': self.port(op) }
+        except Exception as ex:
+            print(f"ERROR[{type(ex).__name__}] in OneWirePort.action", ex.args)
+            return { 'info': info, 'ex': type(ex).__name__, 'call': 'OneWirePort.action' }
 
 
 class DS2408(OneWirePort):
     """Device support for DS2408 8-bit I/O port."""
 
     # device specific constants...
-    TYPE = 'port'
     FAMILY = 0x29
     DESC = 'DS2408 (0x29) 8-bit I/O port'
+    PORT_MASK = 0xFF
+    PORT_READ_REG_SEQ = [0xF0,0x89,0x00]  # port type specific sequence 
+
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
-        self.mask = params.get('mask',0xFF)
-        self.invert = params.get('invert',0x00)
+        self.PORT_MASK = params.get('port_mask',DS2408.PORT_MASK)
         super().__init__(bus, address, params)
 
 Device.register(DS2408.FAMILY,DS2408)
+
 
 class DS2413(OneWirePort):
     """Device support for DS2413 2-bit I/O port."""
@@ -157,11 +145,14 @@ class DS2413(OneWirePort):
     # device specific constants...
     FAMILY = 0x3A
     DESC = 'DS2413 (0x3A) 2-bit I/O port'
+    PORT_MASK = 0x03
+    PORT_INTERLEAVE = True
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
-        self.mask = params.get('mask',0x02)
-        self.invert = params.get('invert',0x00)
+        self.PORT_MASK = params.get('port_mask',DS2413.PORT_MASK)
         super().__init__(bus, address, params)
 
 Device.register(DS2413.FAMILY,DS2413)
+
+# DS28E04 and DS28E04 defined in onewire_other.py

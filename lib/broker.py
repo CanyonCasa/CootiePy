@@ -75,37 +75,45 @@ class IO:
         else:
             if 'driver' in obj:
                 driver = obj['driver']
-                if self.verbose: print(f"Adding driver: {obj['name']}")
-                if driver=='OneWire':
-                    self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
-                    self.instances[obj['name']] = obj['name']
-                    print(f"Onewire... {obj['name']}")
-                    print(self.interfaces)
-                    print(self.instances)
-                elif driver=='Analog':
-                    self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
-                elif driver=='Digital':
-                    self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
-                elif driver=='PWM':
-                    self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
-                else:
-                    print(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
+                try:
+                    if self.verbose: print(f"Adding driver: {obj['name']}")
+                    if driver=='OneWire':
+                        self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
+                        self.instances[obj['name']] = obj['name']
+                        print(f"Onewire... {obj['name']}")
+                        print(self.interfaces)
+                        print(self.instances)
+                    elif driver=='Analog':
+                        self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
+                    elif driver=='Digital':
+                        self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
+                    elif driver=='PWM':
+                        self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
+                    else:
+                        print(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
+                except Exception as ex:
+                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {driver}", ex.args)
+                    raise ex
             elif 'interface' in obj:
-                aliases = [str(x) for x in (set([obj.get('id'),obj.get('name'),obj.get('sn'),obj.get('addr')] +
-                    obj.get('aliases',[])) - {None})]   # aliases defined for each io object for cross references
-                if self.verbose: print(f"Adding instance[{obj['interface']}]: {aliases}")
-                interface = self.interfaces.get(obj['interface'],None)
-                if not interface:
-                    print(f"WARN: Ignoring instance {self.identity(obj)}, interface {obj['interface']} NOT DEFINED")
-                else:
-                    interface.createInstance(obj, aliases)
-                    for a in aliases:
-                        exists = self.instances.get(a)
-                        if exists:
-                            print(f"WARN: Interface '{obj['interface']}' alias '{a}' exists; redefining alias")
-                        else:
-                            if self.verbose: print(f"Creating instance alias '{a}' for interface '{obj['interface']}'")
-                        self.instances[a] = obj['interface']
+                try:
+                    aliases = [str(x) for x in (set([obj.get('id'),obj.get('name'),obj.get('sn'),obj.get('addr')] +
+                        obj.get('aliases',[])) - {None})]   # aliases defined for each io object for cross references
+                    if self.verbose: print(f"Adding instance[{obj['interface']}]: {aliases}")
+                    interface = self.interfaces.get(obj['interface'],None)
+                    if not interface:
+                        print(f"WARN: Ignoring instance {self.identity(obj)}, interface {obj['interface']} NOT DEFINED")
+                    else:
+                        interface.createInstance(obj, aliases)
+                        for a in aliases:
+                            exists = self.instances.get(a)
+                            if exists:
+                                print(f"WARN: Interface '{obj['interface']}' alias '{a}' exists; redefining alias")
+                            else:
+                                if self.verbose: print(f"Creating instance alias '{a}' for interface '{obj['interface']}'")
+                            self.instances[a] = obj['interface']
+                except Exception as ex:
+                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load instance", ex.args)
+                    raise ex
             else:
                 print("WARN: I/O definition lacks driver/interface property", obj)
 
@@ -113,7 +121,7 @@ class IO:
         instance = self.instances.get(msg['id'])
         interface = self.interfaces.get(instance)
         try:
-            if self.verbose: print(f"IO.handle: id->{msg['id']}, instance->{instance}, interface->{interface}")
+            #if self.verbose: print(f"IO.handle: id->{msg['id']}, instance->{instance}, interface->{interface}")
             return interface.handler(msg)
         except Exception as ex:
             print(f"ERROR[{type(ex).__name__}]: broker[IO.handle]: {instance}, {interface}")

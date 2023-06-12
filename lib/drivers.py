@@ -42,14 +42,22 @@ class OneWireDriver:
         self.bus = OneWireBus(getattr(board,self.params['pin']))
         failed = self.bus.status(cfg.get('debug'))
         if failed:
-            print(f"ERROR: OneWireDriver[{self.name}] bus error")
+            raise Exception("ERROR: OneWireDriver[{self.name}]: OneWire bus failure")
         else:
             device = self.bus.define_device(None,{})    # default OneWire Device (bus)
             self.instances.append({ 'cfg': {}, 'address': None, 'device': device }) # add bus as intial instance
             if self.cfg.get('debug'):
-                found = self.bus.scan()
-                for f in found:
-                    print(f"Found[{f[2]}]: {OneWireBus.REGISTERED[f[0]].DESC}")
+                try:
+                    found = self.bus.scan()
+                    if found:
+                        for f in found:
+                            if f['family'] in OneWireBus.REGISTERED:
+                                print(f"Found[{f['sn']}]: {OneWireBus.REGISTERED[f['family']].DESC}")
+                            else:
+                                print(f"Found[{f['sn']}]: unknown type")
+                except Exception as ex:
+                    print(f"ERROR[OneWireDriver.init]: {type(ex).__name__}", ex.args)
+                    raise ex
 
     def createInstance(self, io, aliases):
         if not 'sn' in io:
@@ -70,7 +78,7 @@ class OneWireDriver:
 
     def handler(self, msg):
         self.q.push(msg)
-        if self.verbose: print(f'handler[{self.name},{self.q.avaliable()}]: {msg}')
+        if self.verbose: print(f'handler[{self.name},{self.q.available}]: {msg}')
 
     def poll(self):
         def packet(data):
@@ -85,21 +93,15 @@ class OneWireDriver:
             try:
                 ref = self.aliases.get(self.active['id'],0)
                 instance = self.instances[ref]
-                action = self.active.get('action',instance['device'].TYPE)
-            except Exception as ex:
-                print(f"Exception: {ex}")
-                return None
-            if action=='temperature':
-                units = self.active.get('units',instance['device'].units)
-                temp = instance['device'].temperature(units)
-                if temp==None: return None
-                return packet({'temperature':temp, 'units': units})
-            # if busy, return None
-            if self.bus.busy:
-                if self.verbose: print("busy...")
-                return None
-            else:
-                if action=='bus':
+                category = self.active.get('category',instance['device'].CATEGORY)
+                if category=='temperature':
+                    units = self.active.get('units',instance['device'].units)
+                    temp = instance['device'].temperature(units)
+                    if temp==None: return None
+                    return packet({'temperature':temp, 'units': units})
+                elif category=='port':
+                    return packet(instance['device'].action(self.active))
+                elif category=='bus':
                     family = self.active.get('family')
                     status = instance['device'].bus.status(self.active.get('dump'))
                     scan = None if status else instance['device'].search(family)
@@ -121,6 +123,10 @@ class OneWireDriver:
                             else:
                                 unknown += [x['sn']]
                     return packet({'status': status, 'scan': scan, 'known': known, 'unknown': unknown })
+            except Exception as ex:
+                print(f"Error[OneWireDriver.poll: {ex}")
+                packet(ex)
+                return None
 
 class AnalogDriver:
 

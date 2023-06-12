@@ -90,6 +90,8 @@ class OneWireBus:
     @staticmethod
     def crc8snx(data: bytearray) -> int:
         """Perform a 1-wire CRC check on a SN with masking."""
+        if data==None:
+            return None
         if OneWireBus.REGISTERED[data[0]]:
             if hasattr(OneWireBus.REGISTERED[data[0]],'MASK'):
                 data[1] = OneWireBus.REGISTERED[data[0]].MASK
@@ -132,7 +134,7 @@ class OneWireBus:
             return address['rom']
         elif type(address)==bytearray:
             return address
-        elif type(address)==str:    # hex string with or w/o spaces or node-red format
+        elif type(address)==str:    # hex string with or w/o spaces or rpi/node-red format
             astr = address.replace(' ','').replace('-','')
             a = bytearray([int(astr[i:i+2],16) for i in range(0,len(astr),2)])
             if len(a)==7:
@@ -145,12 +147,14 @@ class OneWireBus:
     @staticmethod
     def frmt_addr(rom) -> dict:
         """Converts a rom bytearray into multiple address forms for display, etc"""
+        if rom == None:
+            return {'family': None,'rom': None, 'sn': None, 'hex':None,'rpi': None,'reverse': None}
         family = rom[0]
         sn = OneWireBus.bytes2hex(rom)    # defacto hex string
         hxx = sn.replace(' ','')    # hexstring, no spaces
-        nr = (hxx[:2] + '-' + hxx[2:14]).lower()    # node-red format
+        rpi = (hxx[:2] + '-' + hxx[2:14]).lower()    # rpi/node-red format
         rev = ' '.join(sn.split(' ')[::-1]) # reverse order
-        return {'family': family,'rom': rom, 'sn': sn, 'hex':hxx,'nodered': nr,'reverse': rev}
+        return {'family': family,'rom': rom, 'sn': sn, 'hex':hxx,'rpi': rpi,'reverse': rev}
 
     def define_device(self, address, params: dict={}, dev_class=None):
         """Associates a specific device with its bus"""
@@ -197,7 +201,7 @@ class OneWireBus:
             if conflicts==None: # conflicts==None for errors!
                 print(f"ERROR[OneWireBus.scan]: NO devices present of stuck bus!")
                 break
-            if not self.crc8snx(rom): # rom as bytearray; zero crc for a valid address
+            if self.crc8snx(rom) == 0: # rom as bytearray; zero crc for a valid address
                 dev = self.frmt_addr(rom)
                 addresses.append(dev)
             else:
