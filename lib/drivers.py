@@ -49,6 +49,7 @@ class OneWireDriver:
             if self.cfg.get('debug'):
                 try:
                     found = self.bus.scan()
+                    print(f"Bus scan found {len(found)} devices.")
                     if found:
                         for f in found:
                             if f['family'] in OneWireBus.REGISTERED:
@@ -65,20 +66,22 @@ class OneWireDriver:
         address = OneWireBus.frmt_addr(OneWireBus.bytes4addr(io['sn']))
         device = self.bus.define_device(address['rom'], io.get('params',{}))
         instance = { 'cfg': io, 'address': address, 'device': device }
-        if self.verbose: print(f"OneWireDriver instance: {instance}")
+        #if self.verbose: print(f"OneWireDriver instance: {instance}")
         self.instances.append(instance)
+        alist = []
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
                 print(f"WARN: OneWire instance '{address['sn']}' alias '{a}' exists; redefining alias")
-            else:
-                if self.verbose: print(f"Creating OneWire instance '{address['sn']}' alias '{a}' reference")
             self.aliases[a] = len(self.instances) - 1
+            if a!=address['sn']:
+                alist.append(a)
+        print(f"Created OneWire instance[{address['sn']}]: {', '.join(alist)}")
         return self.instances[len(self.instances) - 1]
 
     def handler(self, msg):
         self.q.push(msg)
-        if self.verbose: print(f'handler[{self.name},{self.q.available}]: {msg}')
+        #if self.verbose: print(f'handler[{self.name},{self.q.available}]: {msg}')
 
     def poll(self):
         def packet(data):
@@ -93,7 +96,7 @@ class OneWireDriver:
             try:
                 ref = self.aliases.get(self.active['id'],0)
                 instance = self.instances[ref]
-                category = self.active.get('category',instance['device'].CATEGORY)
+                category = self.active.get('CATEGORY',instance['device'].CATEGORY)
                 if category=='temperature':
                     units = self.active.get('units',instance['device'].units)
                     temp = instance['device'].temperature(units)
@@ -116,7 +119,7 @@ class OneWireDriver:
                     if scan:
                         for x in scan:
                             x['rom'] = str(x['rom'])
-                            if self.verbose: print(f"bus scan found: {x['sn']}")
+                            #if self.verbose: print(f"bus scan found: {x['sn']}")
                             k = existing.get(x['sn'],None)
                             if k:
                                 known[x['sn']] = k

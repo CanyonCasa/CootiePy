@@ -20,7 +20,7 @@ class TemperatureSensor(Device):
     WR_SCRATCH = 0x4E
     COPY_SCRATCH = 0x48
     
-    def __init__(self, bus: OneWireBus, address: bytearray, params: dict = {}):
+    def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
         super().__init__(bus, address, params)
         bits = params.get('resolution',0)
         self.bits = bits if bits in [9,10,11,12] else 12   # vaildate, default 12
@@ -28,6 +28,7 @@ class TemperatureSensor(Device):
         self.units = units if units in ['F','C','K','R','X','-'] else 'F'  # valudate, default F
         self.resolution(self.bits)  # set resolution
         self.wait = TemperatureSensor.TEMP_CONVERT_WAIT * 2**(self.bits-12)
+        self.CATEGORY = TemperatureSensor.CATEGORY
 
     def scratchpad_copy(self):
         self.select()
@@ -48,15 +49,16 @@ class TemperatureSensor(Device):
     
     def temperature(self, units=None, wait=False) -> float:
         # converts raw temperature to specified format
-        def temp_as(raw: int, units: str) -> float:
+        def temp_as(raw: int, units: str = '') -> float:
+            temp = raw if raw<32768 else raw - 65536
             if units == 'C':
-                return raw / 16
+                return temp / 16
             elif units == 'F':
-                return (raw / 16) * 1.8 + 32
+                return (temp / 16) * 1.8 + 32
             elif units == 'K':
-                return (raw / 16) + 273.15
+                return (temp / 16) + 273.15
             elif units == 'R':
-                return (raw / 16) * 1.8 + 491.67
+                return (temp / 16) * 1.8 + 491.67
             elif units == 'X':
                 return "0x{:04X}".format(raw)
             else:
@@ -100,7 +102,9 @@ class DS18X20(TemperatureSensor):
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
-        params['desc'] = params.get('desc',DS18X20.DESC)
         super().__init__(bus, address, params)
+        params['desc'] = params.get('desc',DS18X20.DESC)
+        self.DESC = DS18X20.DESC
+        self.desc = params.get('desc',DS18X20.DESC)
 
 Device.register(DS18X20.FAMILY, DS18X20)

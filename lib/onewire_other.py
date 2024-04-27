@@ -26,9 +26,12 @@ class DS2423(Device):
     MEMORY_READ = 0xF0
     MEMORY_READ_AND_COUNTER = 0xA5
 
-    def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
+    def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
         super().__init__(bus, address)
+        self.CATEGORY = DS2423.CATEGORY
+        self.DESC = DS2423.DESC
+        self.desc = params.get('desc',DS2423.DESC)
 
 Device.register(DS2423.FAMILY,DS2423)
 
@@ -39,22 +42,30 @@ class DS2438(Device):
     FAMILY = 0x26
     DESC = 'DS2438 (0x26) Battery Gauge'
 
-    def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
+    def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
         super().__init__(bus, address)
+        self.CATEGORY = DS2438.CATEGORY
+        self.DESC = DS2438.DESC
+        self.desc = params.get('desc',DS2438.DESC)
 
 Device.register(DS2438.FAMILY,DS2438)
 
 
 ### DOES NOT SUPPORT CHAIN AND PORT FUNCTIONS AT THIS TIME!
 class DS28EA00(TemperatureSensor,OneWirePort):
+
     # Device specific definitions
+    CATEGORY = 'multifunction'
     FAMILY = 0x42
     DESC = 'DS28EA00 (0x42) Chainable Temperature Sensor w/PIO'
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
         params['desc'] = params.get('desc',DS28EA00.DESC)
         super().__init__(bus, address, params)
+        self.CATEGORY = DS28EA00.CATEGORY
+        self.DESC = DS28EA00.DESC
+        self.desc = params.get('desc',DS28EA00.DESC)
 
 Device.register(DS28EA00.FAMILY, DS28EA00)
 
@@ -69,13 +80,14 @@ class DS28E04(OneWirePort):
     MASK = 0x7F
     PORT_MASK = 0x03
     PORT_WRITE = 0x5A
-    PORT_READ_REG_SEQ = [0xF0,0x21,0x02]  # port type specific sequence 
-
-
+    PORT_READ_REG_SEQ = [0xF0,0x21,0x02]  # port type specific sequence
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
         super().__init__(bus, address)
+        self.CATEGORY = DS28E04.CATEGORY
+        self.DESC = DS28E04.DESC
+        self.desc = params.get('desc',DS28E04.DESC)
 
 Device.register(DS28E04.FAMILY,DS28E04)
 

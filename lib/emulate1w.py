@@ -1,25 +1,36 @@
 # MIT License
 # Derived from Adafruit CircuitPython OneWire library
 """
-`onewire`
+`emulate1w`
 ====================================================
-Implements a full 1-Wire bus protocol supporting an extendible set of devices
-OneWireBus includes direct interface to low level reset, bit read, and bit 
-write operations of the core onewireio module, as well as higher level-byte 
-and block (i.e. bytearray) read/write operations and device discovery (scan).
-See readme for details 
+Emulates the bus level OneWire routines for testing search algorithm, etc.
 
 * Author(s): CanyonCasa
 """
 
-#__version__ = "0.0.0-auto.0"
-#__repo__ = "https://github.com/canyoncasa/OneWire.git"
+from emulate1wIO import OneWire
 
-from microcontroller import Pin
-from onewireio import OneWire
-import digitalio
-from time import monotonic as mark, sleep
+def hex2bits(h):
+    return bin(int(h,16)).replace('0b','0000000')[-8:]
 
+def rom2bits(ba):
+    bits = ''
+    for b in ba:
+        bits = hex2bits(hex(b)) + bits
+    return bits[::-1]
+
+def rom2sn(ba):
+    hx = ''
+    for b in ba:
+        hx +=  hex(b).replace('x','')[-2:].upper()
+    return hx
+
+def conflicts2markers(conflicts):
+    m = ' '*64
+    for c in conflicts:
+        p = c[0]*8 + c[1]
+        m = m[:p] + '^' + m[p+1:]
+    return m
 
 class OneWireBus:
     """A class to represent a 1-Wire bus/pin."""
@@ -27,7 +38,7 @@ class OneWireBus:
     SEARCH_ROM = 0xF0
     REGISTERED = {}     # Holds defined device types used to auto assign found devices
 
-    def __init__(self, pin: Pin) -> None:
+    def __init__(self, pin) -> None:
         self.pin = pin
         self.io = OneWire(self.pin)
         self.timex = None
@@ -35,15 +46,6 @@ class OneWireBus:
     # reset, read_bit, and write_bit functions wrapped because testing bus reassigns io
     def reset(self, test: bool=False) -> bool:
         """Perform a bus reset"""
-        # patch until reset stuck low fix to onewireio reset 
-        if test:
-            self.io.deinit()
-            x = digitalio.DigitalInOut(self.pin)
-            state = x.value
-            x.deinit()
-            self.io = OneWire(self.pin)
-            if not state:
-                return True # bus stuck low failure
         return self.io.reset()
 
     def readbit(self) -> bool:
@@ -57,19 +59,16 @@ class OneWireBus:
     @property
     def busy(self):
         """Reports whether or not bus is available or waiting on a conversion"""
-        return not self.timex==None
+        return False
 
     @property
     def ready(self):
         """Reports whether or not a pending conversion has completed and clears busy flag if done"""
-        if mark() > self.timex:
-            self.timex = None
         return self.timex==None
 
     def hold(self,wait=None):
         """Defines a hold time for initializing busy state"""
-        if wait:
-            self.timex = mark() + wait
+        pass
 
     @staticmethod
     def crc8(data: bytearray) -> int:
@@ -92,6 +91,7 @@ class OneWireBus:
         """Perform a 1-wire CRC check on a SN with masking."""
         if data==None:
             return None
+        print(f"REGISTERED[{data[0]}]: {OneWireBus.REGISTERED}, {OneWireBus.REGISTERED.get(data[0])}")
         if OneWireBus.REGISTERED.get(data[0]):
             if hasattr(OneWireBus.REGISTERED[data[0]],'MASK'):
                 data[1] = OneWireBus.REGISTERED[data[0]].MASK
@@ -196,6 +196,10 @@ class OneWireBus:
             seed[0] = int(family,16) if isinstance(family,str) else family
         while True: # loop until no conflicts remain...
             rom, conflicts = self._search_rom(seed) # perform a single pass to discover a single device
+            #print(f"rom: {rom}, conflicts: {conflicts}")
+            #print(f"rom: {rom2sn(rom)}")
+            #print(f"rom: {rom2bits(rom)}\n     {conflicts2markers(conflicts)}")
+            #print(f"seed:{rom2bits(seed)}")
             if rom==None:
                 break
             if conflicts==None: # conflicts==None for errors!
@@ -216,7 +220,7 @@ class OneWireBus:
                         return addresses
                     sbit = seed[byte] & 1<<bit and 1
                     seed[byte] ^= 1<<bit    # toggle seed bit: 0 to try 1; 1 back to 0 
-                    if sbit==0: # 1 path not yet taken, toggle seed bit and try again
+                    if sbit==0: # 1 path not yet taken, try again w/toggled bit
                         break   # conflicts loop
                     else:
                         conflicts.pop() # 1 branch taken already, try an earlier conflict
@@ -249,6 +253,7 @@ class OneWireBus:
         """Internal routine used by scan for device discovery; works like DS2480B w/o interleaving"""
         if self.reset(True):    # False when any devices present; tests for stuck bus
             return None, None
+        #print(f"search: {seed}")
         # set search mode: read true bit; read complement bit; write true bit or seed bit for a conflict
         self.writebyte(OneWireBus.SEARCH_ROM)
         rom = bytearray(8)

@@ -78,8 +78,9 @@ def generate_status(glob,prompt=''):
         print(f"generate_status[{glob.utc.iso()}]: {prompt}")
     c = glob.cfg.resolve()
     j = [x['id'] for x in glob.cron.job()]
+    t = microcontroller.cpu.temperature
     q = { 'msgs':{'done':glob.msgs.n, 'pending':glob.msgs.available}, 'rtn':{'done':glob.rtn.n, 'pending':glob.rtn.available} }
-    status = { 'state': 'ready', 'errors': glob.error(), 'queued': q, 'cfg': c, 'jobs': j }
+    status = { 'state': 'ready', 'errors': glob.error(), 'queued': q, 'cfg': c, 'jobs': j, 'temperature': t }
     if prompt:
         print(status)
         status['prompt'] = prompt
@@ -159,9 +160,9 @@ def process_pending_actions(glob):
 
 
 #### main code ####
-print("\nInitialization...")
+print("\nMain Loop Initialization...")
 if not load_definition(glob): raise RuntimeError("Initialization failed!")
-print("Initialization complete!")
+print("Main Loop Initialization complete!")
     
 print("Begin main loop...")
 while not exit:

@@ -21,8 +21,14 @@ class OneWirePort(Device):
     PORT_INTERLEAVE = False
 
 
-    def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
-        super().__init__(bus, address)
+    def __init__(self, bus: OneWireBus, address: bytearray, params: dict={}):
+        super().__init__(bus, address, params)
+        self.CATEGORY = OneWirePort.CATEGORY
+        self.PORT_MASK = OneWirePort.PORT_MASK
+        self.PORT_READ = OneWirePort.PORT_READ
+        self.PORT_READ_REG_SEQ = OneWirePort.PORT_READ
+        self.PORT_WRITE_REG = OneWirePort.PORT_WRITE_REG
+        self.PORT_INTERLEAVE = OneWirePort.PORT_INTERLEAVE
     
     # low level port I/O function to retrieve the RAW port pin states (i.e. no inversion handling)
     def portIn(self, raw=False):
@@ -133,8 +139,11 @@ class DS2408(OneWirePort):
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
-        self.PORT_MASK = params.get('port_mask',DS2408.PORT_MASK)
         super().__init__(bus, address, params)
+        self.DESC = DS2408.DESC
+        self.desc = params.get('desc',DS2408.DESC)
+        self.PORT_READ_REG_SEQ = DS2408.PORT_READ_REG_SEQ
+        self.PORT_MASK = params.get('port_mask',DS2408.PORT_MASK)
 
 Device.register(DS2408.FAMILY,DS2408)
 
@@ -150,8 +159,12 @@ class DS2413(OneWirePort):
 
     def __init__(self, bus: OneWireBus, address: bytearray, params: dict):
         if __class__.FAMILY != address[0]: raise(f"Device {address} not of type {__class__.__name__}")
-        self.PORT_MASK = params.get('port_mask',DS2413.PORT_MASK)
         super().__init__(bus, address, params)
+        self.DESC = DS2413.DESC
+        self.desc = params.get('desc',DS2413.DESC)
+        self.PORT_MASK = params.get('port_mask',DS2413.PORT_MASK)
+        self.PORT_INTERLEAVE = DS2413.PORT_INTERLEAVE
+        self.DESC = DS2413.DESC
 
 Device.register(DS2413.FAMILY,DS2413)
 

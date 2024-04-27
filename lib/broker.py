@@ -80,19 +80,22 @@ class IO:
                     if driver=='OneWire':
                         self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
                         self.instances[obj['name']] = obj['name']
-                        print(f"Onewire... {obj['name']}")
-                        print(self.interfaces)
-                        print(self.instances)
+                        print(f"Driver[{driver}] {obj['name']} defined!")
+                        #print(self.interfaces)
+                        #print(self.instances)
                     elif driver=='Analog':
                         self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
+                        print(f"Driver[{driver}] {obj['name']} defined!")
                     elif driver=='Digital':
                         self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
+                        print(f"Driver[{driver}] {obj['name']} defined!")
                     elif driver=='PWM':
                         self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
+                        print(f"Driver[{driver}] {obj['name']} defined!")
                     else:
                         print(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
                 except Exception as ex:
-                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {driver}", ex.args)
+                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {obj['name']} --> {driver}", ex.args)
                     raise ex
             elif 'interface' in obj:
                 try:

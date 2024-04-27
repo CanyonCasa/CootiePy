@@ -11,7 +11,7 @@
     "io":[
         {
             "driver": "OneWire",
-            "debug": false,
+            "debug": true,
             "name": "1wire",
             "params": {"pin": "D1"}
         },
@@ -35,23 +35,43 @@
             "desc": "Outside temperature measurement (F)", 
             "name": "tOutside",
             "sn": "28 69 2F 2C 0C 32 20 9A",
-            "func": ["temperature","resolution"],
             "params": {"units": "F", "resolution": 8}
         },
         {
             "interface": "1wire",
             "desc": "Inside temperature measurement (F)",
             "name": "tInside",
-            "xsn": "285445FF0000003C",
-            "sn": "28-5445ff000000",
-            "type": "temp"
+            "sn": "28-5445ff000000"
         },
         {
             "interface": "1wire",
-            "desc": "Water flow counter",
-            "name": "flow",
-            "sn": "1D F0 F7 09 00 00 00 D5",
-            "type": "counter"
+            "desc": "West Sprinkler Port",
+            "name": "west",
+            "sn": "29 EE D2 02 00 00 00 C3"
+        },
+        {
+            "interface": "1wire",
+            "desc": "South Sprinkler Port",
+            "name": "south",
+            "sn": "29 0B B7 19 00 00 00 6E"
+        },
+        {
+            "interface": "1wire",
+            "desc": "Cental Sprinkler Port",
+            "name": "central",
+            "sn": "29 E5 D2 02 00 00 00 3B"
+        },
+        {
+            "interface": "1wire",
+            "desc": "East Sprinkler Port",
+            "name": "east",
+            "sn": "29 F1 D2 02 00 00 00 BC"
+        },
+        {
+            "interface": "1wire",
+            "desc": "Cental Temp",
+            "name": "tcentral",
+            "sn": "28 9E A0 16 A8 01 3C B4"
         },
         {
             "interface": "analog",

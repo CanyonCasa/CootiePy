@@ -3,3 +3,5 @@ help.txt
 *.exe
 *.code-workspace
 temp
+.*
+__pycache__
