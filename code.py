@@ -178,11 +178,16 @@ def process_pending_actions(glob):
 #### main code ####
 scribe = Scribe('MAIN').scribe
 print()
-scribe("Main Initialization...")
+scribe("Initialization...")
 if not load_definition(glob): raise RuntimeError("Initialization failed!")
-scribe("Main Initialization complete!")
-    
-scribe("Begin main loop...")
+scribe("Initialization complete!")
+
+if glob.cfg.resolve('ready',False):
+    msg = {'cmd': 'ready', 'name':glob.cfg.resolve('name','CootiePy'), 'tag': 'init-time'}
+    glob.rtn.push(msg)
+    scribe(f"Ready notice: {msg}")
+
+scribe("Begin service loop...")
 while not exit:
     check_for_messages(serial, glob)
     check_cronjobs(glob)
