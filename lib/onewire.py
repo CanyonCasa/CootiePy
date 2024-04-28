@@ -18,14 +18,20 @@ See readme for details
 from microcontroller import Pin
 from onewireio import OneWire
 import digitalio
-from time import monotonic as mark, sleep
+from time import monotonic_ns, sleep
 
+from scribe import Scribe
+scribe = Scribe('WIRE').scribe
+# note: scribe can simply be replaced by print to remove dependency
+
+def millis():
+    return monotonic_ns() // 1000000
 
 class OneWireBus:
     """A class to represent a 1-Wire bus/pin."""
     # OneWire bus commands...
     SEARCH_ROM = 0xF0
-    REGISTERED = {}     # Holds defined device types used to auto assign found devices
+    REGISTERED = {}     # defined device types used to auto assign found devices
 
     def __init__(self, pin: Pin) -> None:
         self.pin = pin
@@ -62,14 +68,14 @@ class OneWireBus:
     @property
     def ready(self):
         """Reports whether or not a pending conversion has completed and clears busy flag if done"""
-        if mark() > self.timex:
+        if millis() > self.timex:
             self.timex = None
         return self.timex==None
 
     def hold(self,wait=None):
         """Defines a hold time for initializing busy state"""
         if wait:
-            self.timex = mark() + wait
+            self.timex = millis() + wait
 
     @staticmethod
     def crc8(data: bytearray) -> int:
@@ -141,7 +147,7 @@ class OneWireBus:
                 a.append(OneWireBus.crc8snx(a))
             return a
         else:
-            print('WARN[OneWireBus.bytes4addr]: unknown address type =>', address, type(address))
+            scribe(f"WARN[OneWireBus.bytes4addr]: unknown address type =>{type(address)({address})}")
             return None
 
     @staticmethod
@@ -199,13 +205,13 @@ class OneWireBus:
             if rom==None:
                 break
             if conflicts==None: # conflicts==None for errors!
-                print(f"ERROR[OneWireBus.scan]: NO devices present of stuck bus!")
+                scribe(f"ERROR[OneWireBus.scan]: NO devices present of stuck bus!")
                 break
             if self.crc8snx(rom) == 0: # rom as bytearray; zero crc for a valid address
                 dev = self.frmt_addr(rom)
                 addresses.append(dev)
             else:
-                print(f"ERROR[OneWireBus.scan]: failed CRC! Device {dev['sn']} ignored")
+                scribe(f"ERROR[OneWireBus.scan]: failed CRC! Device {dev['sn']} ignored")
                 break
             if not len(conflicts):  # no more conflicts, done!
                 break
@@ -228,10 +234,10 @@ class OneWireBus:
         """Reports on bus health; optionally dumps to console"""
         r = self.reset(True)
         if dump:
-            print(f"Reset: {('Bus OK', 'Bus fault/no devices')[r]}")
-            print('Registered devices...')
+            scribe(f"Reset: {('Bus OK', 'Bus fault/no devices')[r]}")
+            scribe('Registered devices...')
             for f in sorted(OneWireBus.REGISTERED.keys()):
-                print(f'  {f:02}:   {OneWireBus.REGISTERED[f].DESC}')
+                scribe(f'  {f:02}:   {OneWireBus.REGISTERED[f].DESC}')
         return r
         
     def write(self, buf: bytearray) -> None:

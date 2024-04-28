@@ -24,6 +24,8 @@ try:
 except:
     pass
 
+from scribe import Scribe
+scribe = Scribe('DRVR').scribe
 
 class OneWireDriver:
     """A class to interface a OneWireBus to the QTPy protocol."""
@@ -49,15 +51,15 @@ class OneWireDriver:
             if self.cfg.get('debug'):
                 try:
                     found = self.bus.scan()
-                    print(f"Bus scan found {len(found)} devices.")
+                    scribe(f"Bus scan found {len(found)} devices.")
                     if found:
                         for f in found:
                             if f['family'] in OneWireBus.REGISTERED:
-                                print(f"Found[{f['sn']}]: {OneWireBus.REGISTERED[f['family']].DESC}")
+                                scribe(f"Found[{f['sn']}]: {OneWireBus.REGISTERED[f['family']].DESC}")
                             else:
-                                print(f"Found[{f['sn']}]: unknown type")
+                                scribe(f"Found[{f['sn']}]: unknown type")
                 except Exception as ex:
-                    print(f"ERROR[OneWireDriver.init]: {type(ex).__name__}", ex.args)
+                    scribe(f"ERROR[OneWireDriver.init]: {type(ex).__name__} { ex.args}")
                     raise ex
 
     def createInstance(self, io, aliases):
@@ -66,22 +68,22 @@ class OneWireDriver:
         address = OneWireBus.frmt_addr(OneWireBus.bytes4addr(io['sn']))
         device = self.bus.define_device(address['rom'], io.get('params',{}))
         instance = { 'cfg': io, 'address': address, 'device': device }
-        #if self.verbose: print(f"OneWireDriver instance: {instance}")
+        #if self.verbose: scribe(f"OneWireDriver instance: {instance}")
         self.instances.append(instance)
         alist = []
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
-                print(f"WARN: OneWire instance '{address['sn']}' alias '{a}' exists; redefining alias")
+                scribe(f"WARN: OneWire instance '{address['sn']}' alias '{a}' exists; redefining alias")
             self.aliases[a] = len(self.instances) - 1
             if a!=address['sn']:
                 alist.append(a)
-        print(f"Created OneWire instance[{address['sn']}]: {', '.join(alist)}")
+        scribe(f"Created OneWire instance[{address['sn']}]: {', '.join(alist)}")
         return self.instances[len(self.instances) - 1]
 
     def handler(self, msg):
         self.q.push(msg)
-        #if self.verbose: print(f'handler[{self.name},{self.q.available}]: {msg}')
+        #if self.verbose: scribe(f'handler[{self.name},{self.q.available}]: {msg}')
 
     def poll(self):
         def packet(data):
@@ -119,7 +121,7 @@ class OneWireDriver:
                     if scan:
                         for x in scan:
                             x['rom'] = str(x['rom'])
-                            #if self.verbose: print(f"bus scan found: {x['sn']}")
+                            #if self.verbose: scribe(f"bus scan found: {x['sn']}")
                             k = existing.get(x['sn'],None)
                             if k:
                                 known[x['sn']] = k
@@ -127,7 +129,7 @@ class OneWireDriver:
                                 unknown += [x['sn']]
                     return packet({'status': status, 'scan': scan, 'known': known, 'unknown': unknown })
             except Exception as ex:
-                print(f"Error[OneWireDriver.poll: {ex}")
+                scribe(f"Error[OneWireDriver.poll: {ex}")
                 packet(ex)
                 return None
 
@@ -152,23 +154,23 @@ class AnalogDriver:
             try:
                 instance['input'] = AnalogIn(instance['pin'])
             except:
-                print(f"WARN: Analog input not supported for {instance['name']}, pin: {instance['pin']}!")
+                scribe(f"WARN: Analog input not supported for {instance['name']}, pin: {instance['pin']}!")
                 return None
         else:
             try:
                 instance['output'] = AnalogOut(instance['pin'])
             except:
-                print(f"WARN: Analog output not supported for {instance['name']}, pin: {instance['pin']}!")
+                scribe(f"WARN: Analog output not supported for {instance['name']}, pin: {instance['pin']}!")
                 return None
             self.output(instance,instance['init'])
-        if self.verbose: print(f"AnalogDriver instance: {instance}")
+        if self.verbose: scribe(f"AnalogDriver instance: {instance}")
         self.instances.append(instance)
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
-                print(f"WARN: Analog instance alias '{a}' exists; redefining alias")
+                scribe(f"WARN: Analog instance alias '{a}' exists; redefining alias")
             else:
-                if self.verbose: print(f"Creating Analog instance '{a}' reference")
+                if self.verbose: scribe(f"Creating Analog instance '{a}' reference")
             self.aliases[a] = len(self.instances) - 1
         return self.instances[len(self.instances) - 1]
 
@@ -234,16 +236,16 @@ class DigitalDriver:
                 if instance['term']=="OD": instance['io'].DriveMode = digitalio.DriveMode.OPEN_DRAIN
         except:
             mode = ('output','input')[instance['init']=="Z"]
-            print(f"WARN: Digital {mode} not supported for {instance['name']}, pin: {instance['pin']}!")
+            scribe(f"WARN: Digital {mode} not supported for {instance['name']}, pin: {instance['pin']}!")
             return None
-        if self.verbose: print(f"DigitalDriver instance: {instance}")
+        if self.verbose: scribe(f"DigitalDriver instance: {instance}")
         self.instances.append(instance)
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
-                print(f"WARN: Digital instance alias '{a}' exists; redefining alias")
+                scribe(f"WARN: Digital instance alias '{a}' exists; redefining alias")
             else:
-                if self.verbose: print(f"Creating Digital instance '{a}' reference")
+                if self.verbose: scribe(f"Creating Digital instance '{a}' reference")
             self.aliases[a] = len(self.instances) - 1
         return self.instances[len(self.instances) - 1]
 
@@ -281,16 +283,16 @@ class PWMDriver:
             instance['pwm'].duty_cycle = self.dutycycle(instance['dc'])
             instance['pwm'].frequency = instance['freq']
         except:
-            print(f"WARN: PWM not supported for {instance['name']}, pin: {instance['pin']}!")
+            scribe(f"WARN: PWM not supported for {instance['name']}, pin: {instance['pin']}!")
             return None
-        if self.verbose: print(f"PWMDriver instance: {instance}")
+        if self.verbose: scribe(f"PWMDriver instance: {instance}")
         self.instances.append(instance)
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
-                print(f"WARN: PWM instance alias '{a}' exists; redefining alias")
+                scribe(f"WARN: PWM instance alias '{a}' exists; redefining alias")
             else:
-                if self.verbose: print(f"Creating PWM instance '{a}' reference")
+                if self.verbose: scribe(f"Creating PWM instance '{a}' reference")
             self.aliases[a] = len(self.instances) - 1
         return self.instances[len(self.instances) - 1]
 

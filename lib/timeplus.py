@@ -79,6 +79,12 @@ class Zulutime:
     def time(self):
         return timex.time()
 
+    def mark(self):
+        return "%0.3f" % (timex.monotonic_ns() // 1000000 % 60000 / 1000)
+
+    def millis(self):
+        return timex.monotonic_ns() // 1000000
+        
     def monotonic(self):
         return timex.monotonic()
 

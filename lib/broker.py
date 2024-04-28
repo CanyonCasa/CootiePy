@@ -10,6 +10,9 @@ from timeplus import Zulutime, Cron
 from simpleq import Queue
 from drivers import *
 
+from scribe import Scribe
+scribe = Scribe('BRKR').scribe
+
 # Configuration/Definition class object for simpler dot notation references
 class Definition:
 
@@ -76,68 +79,73 @@ class IO:
             if 'driver' in obj:
                 driver = obj['driver']
                 try:
-                    if self.verbose: print(f"Adding driver: {obj['name']}")
+                    if self.verbose: scribe(f"Adding driver: {obj['name']}")
                     if driver=='OneWire':
                         self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
                         self.instances[obj['name']] = obj['name']
-                        print(f"Driver[{driver}] {obj['name']} defined!")
-                        #print(self.interfaces)
-                        #print(self.instances)
+                        scribe(f"Driver[{driver}] {obj['name']} defined!")
+                        #scribe(self.interfaces)
+                        #scribe(self.instances)
                     elif driver=='Analog':
                         self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
-                        print(f"Driver[{driver}] {obj['name']} defined!")
+                        scribe(f"Driver[{driver}] {obj['name']} defined!")
                     elif driver=='Digital':
                         self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
-                        print(f"Driver[{driver}] {obj['name']} defined!")
+                        scribe(f"Driver[{driver}] {obj['name']} defined!")
                     elif driver=='PWM':
                         self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
-                        print(f"Driver[{driver}] {obj['name']} defined!")
+                        scribe(f"Driver[{driver}] {obj['name']} defined!")
                     else:
-                        print(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
+                        scribe(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
                 except Exception as ex:
-                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {obj['name']} --> {driver}", ex.args)
+                    scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {obj['name']} --> {driver} {ex.args}")
                     raise ex
             elif 'interface' in obj:
                 try:
                     aliases = [str(x) for x in (set([obj.get('id'),obj.get('name'),obj.get('sn'),obj.get('addr')] +
                         obj.get('aliases',[])) - {None})]   # aliases defined for each io object for cross references
-                    if self.verbose: print(f"Adding instance[{obj['interface']}]: {aliases}")
+                    if self.verbose: scribe(f"Adding instance[{obj['interface']}]: {aliases}")
                     interface = self.interfaces.get(obj['interface'],None)
                     if not interface:
-                        print(f"WARN: Ignoring instance {self.identity(obj)}, interface {obj['interface']} NOT DEFINED")
+                        scribe(f"WARN: Ignoring instance {self.identity(obj)}, interface {obj['interface']} NOT DEFINED")
                     else:
                         interface.createInstance(obj, aliases)
                         for a in aliases:
                             exists = self.instances.get(a)
                             if exists:
-                                print(f"WARN: Interface '{obj['interface']}' alias '{a}' exists; redefining alias")
+                                scribe(f"WARN: Interface '{obj['interface']}' alias '{a}' exists; redefining alias")
                             else:
-                                if self.verbose: print(f"Creating instance alias '{a}' for interface '{obj['interface']}'")
+                                if self.verbose: scribe(f"Creating instance alias '{a}' for interface '{obj['interface']}'")
                             self.instances[a] = obj['interface']
                 except Exception as ex:
-                    print(f"ERROR[{type(ex).__name__}]: IO.add Failed to load instance", ex.args)
+                    scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load instance", ex.args)
                     raise ex
             else:
-                print("WARN: I/O definition lacks driver/interface property", obj)
+                scribe("WARN: I/O definition lacks driver/interface property", obj)
 
-    def handle(self, msg):
+    def handle(self, msg, trace=False):
         instance = self.instances.get(msg['id'])
         interface = self.interfaces.get(instance)
+        if trace:
+            scribe(f"handler[{msg['id']}]: {instance}:{interface.name}")
         try:
-            #if self.verbose: print(f"IO.handle: id->{msg['id']}, instance->{instance}, interface->{interface}")
+            #if self.verbose: scribe(f"IO.handle: id->{msg['id']}, instance->{instance}, interface->{interface}")
             return interface.handler(msg)
         except Exception as ex:
-            print(f"ERROR[{type(ex).__name__}]: broker[IO.handle]: {instance}, {interface}")
+            scribe(f"ERROR[{type(ex).__name__}]: broker[IO.handle]: {instance}, {interface}")
             return None
 
     def identity(self, cfg):
         return str(cfg.get('id',cfg.get('name',cfg.get('sn',cfg.get('addr','UNKNOWN')))))
 
-    def poll(self):
+    def poll(self,trace=False):
         results = []
         for interface in self.interfaces.values():
             result = interface.poll()
-            if result: results.append(result)
+            if result: 
+                results.append(result)
+                if trace:
+                    scribe(f"poll[{interface.name}]")
         return results
 
 

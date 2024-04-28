@@ -4,6 +4,7 @@ import os
 import usb_cdc
 import json
 from broker import Glob, IO # custom broker library
+from scribe import Scribe
 
 # global variables
 serial = usb_cdc.data   # defines the serial I/F instance
@@ -21,24 +22,25 @@ def load_definition(glob,file=None):
             glob.cfg.remove()
             glob.cfg.add(def_obj['cfg'])
         verbose = glob.cfg.resolve('verbose',False)
-        if verbose: print('load_definition: configuration processed')
+        if verbose: scribe('load_definition: configuration processed')
         if 'io' in def_obj:
             glob.io = IO(def_obj['io'],verbose)
-        if verbose: print('load_definition: i/o processed')
+        if verbose: scribe('load_definition: i/o processed')
         if 'jobs' in def_obj:
             glob.cron.jobs.flush(True)
             glob.cron.job(def_obj['jobs'])
-        if verbose: print('load_definition: (cron) jobs processed')
-        print(f"Definition file '{file}' successfully loaded")
+        if verbose: scribe('load_definition: (cron) jobs processed')
+        scribe(f"Definition file '{file}' successfully loaded")
         return file
     except Exception as ex:
-        print(f"ERROR[{type(ex).__name__}]: Loading definition file: {file}", ex.args)
+        scribe(f"ERROR[{type(ex).__name__}]: Loading definition file: {file} {ex.args}")
         return None
 
 # this method processes serial input, line-by-line, as JSON and places valid msgs in the msgs queue ...
 def check_for_messages(serial, glob):
     quiet = glob.cfg.resolve('quiet',False)
     cfg_ack = glob.cfg.resolve('ack',False)
+    cfg_trace = glob.cfg.resolve('trace',False)
     # only if input is available...
     while serial.in_waiting:
         # read binary buffer input by line, remove \n, convert to string
@@ -47,6 +49,8 @@ def check_for_messages(serial, glob):
             # assume input is JSON and convert to dictionary (i.e. Python object)
             try:
                 msg = json.loads(line)
+                if cfg_trace:
+                    scribe(f"trace[recieved]: {msg}")
                 msg['err'] = None   # add an error field to return
                 glob.msgs.push(msg)
                 if not quiet:
@@ -56,33 +60,37 @@ def check_for_messages(serial, glob):
                         msg({ack:'echo'})
                         glob.rtn.push(msg)
                     elif ack=='log':
-                        print('ack:',msg)
+                        scribe('ack:',msg)
                     elif ack:
                         mtype = (('unknown','action')['id' in msg],'command')['cmd' in msg]
                         ref = msg.get('tag',msg.get('id',msg.get('cmd','-?-')))
                         glob.rtn.push({'tag': 'ack', 'ack': mtype, 'ref': ref, 'err': None})   # receipt!
             except Exception as e:
-                print(f'ERROR[{type(e)}]: {line}\n  {e}')
+                scribe(f'ERROR[{type(e)}]: {line}\n  {e}')
                 if not quiet:
                     glob.rtn.push({'tag': 'err', 'err': e, 'line': line})
 
 # send return msgs...
 def return_results(serial,glob):
+    cfg_trace = glob.cfg.resolve('trace',False)
     while glob.rtn.available:
         msg = glob.rtn.pull()
-        serial.write((json.dumps(msg)+'\n').encode('utf8'))
+        jmsg = (json.dumps(msg)+'\n').encode('utf8')
+        serial.write(jmsg)
+        if cfg_trace:
+            scribe(f"trace[sent]: {jmsg}")
 
 # gather up status info...
 def generate_status(glob,prompt=''):
     if prompt: 
-        print(f"generate_status[{glob.utc.iso()}]: {prompt}")
+        scribe(f"generate_status[{glob.utc.iso()}]: {prompt}")
     c = glob.cfg.resolve()
     j = [x['id'] for x in glob.cron.job()]
     t = microcontroller.cpu.temperature
     q = { 'msgs':{'done':glob.msgs.n, 'pending':glob.msgs.available}, 'rtn':{'done':glob.rtn.n, 'pending':glob.rtn.available} }
     status = { 'state': 'ready', 'errors': glob.error(), 'queued': q, 'cfg': c, 'jobs': j, 'temperature': t }
     if prompt:
-        print(status)
+        scribe(status)
         status['prompt'] = prompt
     return status
 
@@ -121,7 +129,7 @@ def execute_command(msg, glob):
         t = glob.utc.timeAs # capture time so all output values are consistent
         t['sync'] = "sync@"+t['datetime']['short']
         t['tick'] = glob.cron.time(t['epoch'])[0]
-        if msg.get('ack')=='log': print("Time set:", t['local'])
+        if msg.get('ack')=='log': scribe("Time set:", t['local'])
         rtnMsg['time'] = t
     elif cmd=='ctrl':
         globals()['loopInterrupt'] = msg.get('ctrl','')
@@ -136,6 +144,7 @@ def execute_command(msg, glob):
 
 # sorts out input messages and events into commands and actions...
 def sift_messages_and_events(glob):
+    cfg_trace = glob.cfg.resolve('trace',False)
     for src in [glob.msgs, glob.events]:
         while src.available:
             msg = src.pull()
@@ -144,7 +153,11 @@ def sift_messages_and_events(glob):
                 execute_command(msg, glob)
             # is it an action message, if so queue action
             elif msg.get('id',None):
-                action = glob.io.handle(msg)
+                if cfg_trace:
+                    scribe(f"trace[*handle]: {msg.get('id')}")
+                action = glob.io.handle(msg,cfg_trace)
+                if cfg_trace:
+                    scribe(f"trace[handle*]: {msg.get('id')}")
                 if action:
                     glob.rtn.push(action)
             # otherwise unknown
@@ -154,17 +167,22 @@ def sift_messages_and_events(glob):
                     glob.rtn.push(msg)
 
 def process_pending_actions(glob):
-    results = glob.io.poll()
+    trace = glob.cfg.resolve('trace',False)
+    results = glob.io.poll(trace)
     if results:
         glob.rtn.push(results)
+        if trace:
+            scribe(f"trace[pending]: {results}")
 
 
 #### main code ####
-print("\nMain Loop Initialization...")
+scribe = Scribe('MAIN').scribe
+print()
+scribe("Main Initialization...")
 if not load_definition(glob): raise RuntimeError("Initialization failed!")
-print("Main Loop Initialization complete!")
+scribe("Main Initialization complete!")
     
-print("Begin main loop...")
+scribe("Begin main loop...")
 while not exit:
     check_for_messages(serial, glob)
     check_cronjobs(glob)
@@ -173,13 +191,13 @@ while not exit:
     return_results(serial, glob)
     if loopInterrupt:
         if loopInterrupt=='reload':
-            print('Executing reload...')
+            scribe('Executing reload...')
             supervisor.reload()
         if loopInterrupt=='reset':
-            print('Commanded reset...')
+            scribe('Commanded reset...')
             glob.utc.sleep(2)
             microcontroller.reset()
         exit = (loopInterrupt=='exit')
-    glob.utc.sleep(0.1)
+    glob.utc.sleep(0.01)
 
-print("Execution halted!")
+scribe("Execution halted!")

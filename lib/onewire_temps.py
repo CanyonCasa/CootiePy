@@ -14,7 +14,7 @@ from time import sleep
 class TemperatureSensor(Device):
 
     CATEGORY = 'temperature'
-    TEMP_CONVERT_WAIT = 0.8 # @ 12 bits
+    TEMP_CONVERT_WAIT = 800 # ms @ 12 bits
     CONVERT_T = 0x44
     RD_SCRATCH = 0xBE
     WR_SCRATCH = 0x4E
@@ -27,7 +27,7 @@ class TemperatureSensor(Device):
         units = params.get('units','').upper()
         self.units = units if units in ['F','C','K','R','X','-'] else 'F'  # valudate, default F
         self.resolution(self.bits)  # set resolution
-        self.wait = TemperatureSensor.TEMP_CONVERT_WAIT * 2**(self.bits-12)
+        self.wait = TemperatureSensor.TEMP_CONVERT_WAIT >> (12-self.bits)
         self.CATEGORY = TemperatureSensor.CATEGORY
 
     def scratchpad_copy(self):
