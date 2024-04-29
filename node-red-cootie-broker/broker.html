@@ -1,83 +1,3 @@
-<!-- color palette configuration node... --> 
-<script type="text/html" data-template-name="cootie-colors-config">
-    <style>ol#node-input-colors-container .red-ui-typedInput-container {flex:1;}</style>
-    <div class="form-row">
-        <label for="node-config-input-name"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
-        <input type="text" id="node-config-input-name" data-i18n="[placeholder]node-red:common.label.name">
-        <div class="form-tips" id="tip-palette-name" hidden><span data-i18n="broker.tips.paletteCfg.name"></span></div>
-    </div>
-    <div class="form-row node-input-colors-container-row">
-        <ol id="node-input-colors-container"></ol>
-        <div class="form-tips" id="tip-palette-colorref" hidden><span data-i18n="broker.tips.paletteCfg.colorref"></span></div>
-        <div class="form-tips" id="tip-palette-colorfill" hidden><span data-i18n="broker.tips.paletteCfg.colorfill"></span></div>
-    </div>
-</script>
-
-<script type="text/javascript">
-(function(){
-    function validator(colors) {    // returns 'false' if color isn't assigned, i.e. not a valid X11/web-safe name
-        if (!colors || colors.length===0) return true;
-        var s = new Option().style;
-        return colors.every(pc=>{s.color=pc.fill; return s.color===pc.fill.toLowerCase()});
-    }
-
-    RED.nodes.registerType('cootie-colors-config',{
-        category: 'config',
-        defaults: {
-            name: {value: "Default Palette", required:true},
-            colors: {value:[{fill:"Chocolate", ref:"Default"}],required:true, validate: validator}
-        },
-        label: function() { return this.name || this._("broker.label.palette"); },
-        oneditprepare: function() {
-            var node = this;
-            $("#node-input-colors-container").editableList({
-                addItem: function(container,i,color) {
-                    container.css({overflow: 'hidden', whitespace: 'nowrap'})
-                    let fragment = document.createDocumentFragment();
-                    var div = $('<div/>',{style:"display:flex;align-items: baseline"}).appendTo(fragment);
-                    var ref = $('<input/>',{class:"node-input-color-property-ref", type:"text", value:color.ref}).appendTo(div);
-                    var fill = $('<input/>',{class:"node-input-color-property-fill", type:"text", value: color.fill}).appendTo(div);
-                    container[0].appendChild(fragment);
-                    var propInput = fill.on("input",function(evt){ 
-                        var valid = validator([{fill:evt?.target?.value}]);
-                        if (valid) {fill.removeClass("input-error")} else {fill.addClass("input-error")};
-                    });
-                },
-                removable: true,
-                sortable: true
-            })
-            for (var i=0; i<this.colors.length; i++) {
-                $("#node-input-colors-container").editableList('addItem',this.colors[i])
-            }
-
-            // add handlers for field tips...
-            var addTipHandlers = (sel,tip)=>{
-                try {
-                    $(sel).on('focus', function () { $(tip).show(); });
-                    $(sel).on('blur', function () { $(tip).hide(); });
-                } catch(e) { console.error(sel+': ',e)}
-            };
-            //addTipHandlers("#node-connection input.red-ui-typedInput-input","#tip-connection");
-            addTipHandlers("#node-config-input-name","#tip-palette-name");
-            addTipHandlers("input.node-input-color-property-ref","#tip-palette-colorref");
-            addTipHandlers("input.node-input-color-property-fill","#tip-palette-colorfill");
-
-        },
-        oneditsave: function() {
-            var node = this;
-            node.colors = [];
-            var colors = $("#node-input-colors-container").editableList('items');
-            colors.each(function(i){
-                var color = $(this);
-                var ref = color.find(".node-input-color-property-ref").val();
-                var fill = color.find(".node-input-color-property-fill").val();
-                node.colors.push({ref: ref, fill: fill})
-            })
-        }
-     });
-})();
-</script>
-
 <!-- connection configuration node... --> 
 <script type="text/html" data-template-name="cootie-connection-config">
     <style>
@@ -275,7 +195,7 @@
 })();
 </script>
 
-<!-- cootie broker (palette) node... --> 
+<!-- cootie broker (node-red palette) node... --> 
 <script type="text/html" data-template-name="cootie-broker">
     <div class="form-row"><p>Node properties...</p></div>
     <div class="form-row">
@@ -285,10 +205,6 @@
     <div class="form-row" id="node-connection">
         <label for="node-input-connection"><i class="fa fa-random"></i><span data-i18n="broker.label.connection"></span></label>
         <input type="text" id="node-input-connection">
-    </div>
-    <div class="form-row" id="node-palette">
-        <label for="node-input-palette"><i class="fa fa-tag"></i><span data-i18n="broker.label.palette"></span></label>
-        <input type="text" id="node-input-palette">
     </div>
     <div class="form-row" id="node-color">
         <label for="node-input-colorRef"><i class="fa fa-tag"></i><span data-i18n="broker.label.color"></span></label>
@@ -344,7 +260,6 @@
         <input type="text" id="node-input-stat" data-i18n="[placeholder]broker.placeholder.stat">
     </div>
     <div class="form-tips" id="tip-connection" hidden><span data-i18n="broker.tips.connection"></span></div>
-    <div class="form-tips" id="tip-palette" hidden><span data-i18n="broker.tips.palette"></span></div>
     <div class="form-tips" id="tip-color" hidden><span data-i18n="broker.tips.color"></span></div>
     <div class="form-tips" id="tip-mode" hidden><span data-i18n="broker.tips.mode"></span></div>
     <div class="form-tips" id="tip-tag" hidden><span data-i18n="broker.tips.tag"></span></div>
@@ -360,17 +275,20 @@
 <!-- cootie broker node -->
 <script type="text/javascript">
 (function() {
-    var nodeDefaultPaletteColor = 'Chocolate';
-    var nodeDefaultPalette = {name:'Default Palette', colors:[{fill:nodeDefaultPaletteColor, ref: 'Default'}]}
     function setNodeColor(node) {
-        var colors = RED.nodes.node(node.palette)?.colors;
-        if (!colors) return;
-        var ref = node.colorRef || nodeDefaultPalette.colors[0].ref;
+        if (!node.colors) {
+            $.getJSON('cootie-broker-colors', function(colors){
+                node.colors = colors;
+                setNodeColor(node);
+            });
+            return;
+        };
+        var ref = node.colorRef || 'Default';
         node.colorRef = ref;
-        var color = colors.filter(c=>c.ref===ref)[0]?.fill || nodeDefaultPalette.colors[0].fill;
+        var color = node.colors.filter(c=>c.ref===ref)[0]?.fill || node.colors[0].fill;
         var element = ($(`#${node.id} > rect`)||[])[0];
         if (element) element.setAttribute('fill',color);
-    }
+    };
 
     RED.nodes.registerType('cootie-broker',{
         category: 'network',
@@ -378,7 +296,6 @@
             connection: {value:"", type:"cootie-connection-config", required:true},
             agent: {value: ""},
             name: {value:""},
-            palette: {value:"", type:"cootie-colors-config"},
             colorRef: {value: ""},
             mode: {value: ""},
             tag: {value:""},
@@ -391,7 +308,7 @@
             customType: {value:"json"},
             ack: {value:""}
         },
-        color: nodeDefaultPaletteColor,
+        color: 'sienna', // default
         inputs: 1,
         outputs: 1,
         icon: "serial.png",
@@ -410,18 +327,12 @@
                 type: "json"
             })
             // setup colors palette...
-            var crSelect = $("#node-input-colorRef");
-            var pSelect = $("#node-input-palette");
-            function updatePalette(palette) {
-                var colors = RED.nodes.node(palette)?.colors || nodeDefaultPalette.colors;
+            $.getJSON('cootie-broker-colors', function(colors){
+                node.colors = colors || [];
+                var crSelect = $("#node-input-colorRef");
                 crSelect.empty();
-                colors.forEach(c=>crSelect[0].add(new Option(`${c.ref} (${c.fill})`,c.ref)))
-            };
-            updatePalette(node.palette);
-            crSelect.val(node.colorRef||crSelect.val()).change();
-            pSelect.on("change",function() {
-                if (node.palette===pSelect.val()) return;
-                updatePalette(pSelect.val());
+                node.colors.forEach(c=>crSelect[0].add(new Option(`${c.ref} (${c.fill})`,c.ref)))
+                crSelect.val(node.colorRef||colors[0].ref);
             });
             // set default mode and respective property selects...
             var showAll = (props)=>props.forEach(p=>$(`#node-${p}`).show());
@@ -454,7 +365,6 @@
                 } catch(e) { console.error(sel+': ',e)}
             };
             addTipHandlers("#node-input-connection","#tip-connection");
-            addTipHandlers("#node-input-palette","#tip-palette");
             addTipHandlers("#node-input-colorRef","#tip-color");
             addTipHandlers("#node-input-mode","#tip-mode");
             addTipHandlers("#node-input-tag","#tip-tag");
@@ -470,9 +380,8 @@
             var node = this;
             var transport = RED.nodes.node(node.connection)?.transport;
             if (transport==='cootie') node.agent = $("input:radio[name='node-input-agent']:checked").val();
-            var colors = RED.nodes.node($("#node-input-palette").val())?.colors || nodeDefaultPalette.colors;
-            node.colorRef = $("#node-input-colorRef").val();
-            var color = colors.filter(c=>c.ref===node.colorRef)[0]?.fill || nodeDefaultPalette.colors[0].fill;
+            node.colorRef = $("#node-input-colorRef").val() || 'Default';
+            var color = node.colors.filter(c=>c.ref===node.colorRef)[0]?.fill || node.colors[0].fill;
             $(`#${node.id} > rect`)[0].setAttribute('fill',color);
         }
     });
@@ -484,6 +393,3 @@
     //RED.events.DEBUG = true;
 })();
 </script>
-
- 
-

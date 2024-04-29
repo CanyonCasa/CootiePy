@@ -23,7 +23,6 @@
             "mode": "Mode",
             "node": "cootie",
             "out": "Output",
-            "palette": "Color Palette",
             "params": "Parameters",
             "port": "Port",
             "stat": "Status",
@@ -71,12 +70,6 @@
             "max": "Tip: Max number of node connections to server",
             "mode": "Tip: Select a configuration mode to set the appropriate properties",
             "out": "Tip: Output 'template' string used to format/filter the output message payload; default whole response if undefined",
-            "palette": "Tip: Choose a group of colors for node color assignement",
-            "paletteCfg": {
-                "name": "Name the palette for reference in the node configuration edit dialog",
-                "colorref": "Define a reference for the color assignment, e.g. Sensors, Commands, Inside, Temps, ...",
-                "colorfill": "Define the referenced color; hint: use X11/web-safe color names. See Wikipedia Web Colors page"
-            },
             "connection": "Tip: Remote broker communications connection",
             "stat": "Tip: Status 'template' string for the response, if present, will be assigned to node status text",
             "tag": "Tip: Route for return data (i.e. event listener tag); See node help for details",
