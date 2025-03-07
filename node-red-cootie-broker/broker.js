@@ -74,8 +74,8 @@ module.exports = function(RED) {
                 node.cntn.debug(`incoming broker msg: ${msg.topic}, ${msg._msgid}`);
                 try {
                     if (node.mode==='custom') { // resolve custom payload if defined...
-                        var custom = !node.custom ? '' : node.customType==='json' ? JSON.parse(node.custom) : 
-                            await jsonataParse(node,node.custom,msg);
+                        var custom = !node.custom ? '' : node.customType==='json' ? JSON.parse(node.custom||{}) : 
+                            await jsonataParse(node,node.custom||{},msg);
                         node.cntn.debug(`custom packet eval: ${JSON.stringify(custom)}`);
                     };
                     // define root output packet; precedence: msg.payload if object, id only if defined, custom or empty...
