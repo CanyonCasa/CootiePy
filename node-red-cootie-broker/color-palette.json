@@ -1,7 +1,0 @@
-[
-    { "ref": "Default", "fill": "sienna" },   
-    { "ref": "Commands", "fill": "tomato"},
-    { "ref": "Client/Server", "fill": "goldenrod"},
-    { "ref": "Ports", "fill": "antiquewhite"},
-    { "ref": "Sensors", "fill": "tan"}
-]

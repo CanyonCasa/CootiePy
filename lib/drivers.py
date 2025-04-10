@@ -9,7 +9,7 @@ Wrapper for a OneWireBus to queue and process messages
 """
 
 #__version__ = "0.0.0-auto.0"
-#__repo__ = "https://github.com/canyoncasa/OneWire.git"
+#__repo__ = "https://github.com/CanyonCasa/Custom-Node-Red-Nodes"
 
 import json
 import board

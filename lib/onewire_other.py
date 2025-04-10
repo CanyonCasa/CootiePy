@@ -6,7 +6,7 @@ Device support for other OneWire devices
 """
 
 #__version__ = "0.0.0-auto.0"
-#__repo__ = "https://github.com/canyoncasa/OneWire.git"
+#__repo__ = "https://github.com/CanyonCasa/Custom-Node-Red-Nodes"
 
 from onewire import OneWireBus, Device
 from onewire_ports import OneWirePort 

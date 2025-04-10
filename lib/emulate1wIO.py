@@ -9,7 +9,7 @@ Emulates the low level OneWire IO routines for testing search algorithm, etc.
 """
 
 #__version__ = "0.0.0-auto.0"
-#__repo__ = "https://github.com/canyoncasa/CootiePy.git"
+#__repo__ = "https://github.com/CanyonCasa/Custom-Node-Red-Nodes"
 
 # from microcontroller import Pin
 

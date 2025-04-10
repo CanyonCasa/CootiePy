@@ -122,6 +122,19 @@ The broker attaches an *err* property, default null, to all return messages cont
     {"tag": "ack", "ack": "<ack>", "err": null}
     ```
 
-    When defined as "echo", the broker returns the complete input message as acknowledgement. If the incoming message did not include an *ack* property, the broker appends the *ack* property to the acknowledged message to enable backend filtering.
+    When defined as "echo", the broker returns the complete input message as acknowledgement. 
+    If the incoming message did not include an *ack* property, the broker appends the *ack* property to the 
+    acknowledged message to enable backend filtering.
 
 * **quiet**: Default *false*. When *true*, acknowledgements and error messages are not returned
+
+### Transports
+
+The Cootie Broker supports multiple transports to passing data to and from Cooties.
+
+  - **Serial (USB)**: A direct USB connection to pass data serially. Data passes as a JSON string.
+  - **UDP**: A wireless connection with little overhead and support for one in many out messages. Data passes as a JSON string.
+  - **HTTP**: A wireless connection with greater overhead but more reliability. GET requests must pass data as a Base64URL encoded query parameter q, i.e. /url?q=<Base64URL_encoded_JSON>. This ensures the ability to pass JSON without causing URL conflicts or the need to define multiple parameters or have to change a URL in the event the JSON contents changes. GET responses return directly as JSON content. A POST request must define a body representing the JSON data and handle the response content. Both request types must provide properContent-Type and Content-length headers
+  - **Cootie**: The Cootie transport allows two Cootie Brokers to talk/listen as client/server pairs across a Node-red application.
+
+Note: The Cootie Broker takes care of preparing JavaScript object data as JSON for the various modes. Individual Cootie endpoints need only implement individual protocols as needed. For example, a serial device only needs to support the Serial interface, not the others, but it must follow the broker protocols to communicate and play nicely.
