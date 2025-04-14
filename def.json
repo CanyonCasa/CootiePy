@@ -13,7 +13,8 @@
             "driver": "OneWire",
             "debug": true,
             "name": "1wire",
-            "params": {"pin": "D1"}
+            "params": {"pin": "D1"},
+            "instance": true
         },
         {
             "driver": "Analog",
@@ -29,6 +30,11 @@
             "driver": "PWM",
             "name": "pwm",
             "debug": true
+        },
+        {
+            "driver": "Unicorn",
+            "name": "unicorn",
+            "debug": true           
         },
         {
             "interface": "1wire",
@@ -83,7 +89,7 @@
             "interface": "digital",
             "desc": "Test output",
             "name": "test",
-            "params": {"pin":"D1", "term":"up", "init": 1}
+            "params": {"pin":"D3", "term":"up", "init": 1}
         },
         {
             "interface": "pwm",

@@ -3,6 +3,7 @@ Library for QTPy Broker
 (C) 2022 Enchanted Engineering
  """
 
+import sys
 import json
 import board
 # from nvstore import NVStore
@@ -78,27 +79,29 @@ class IO:
         else:
             if 'driver' in obj:
                 driver = obj['driver']
+                name = obj.get('name','unknown')
+                verbose = obj.get('debug',self.verbose)
                 try:
-                    if self.verbose: scribe(f"Adding driver: {obj['name']}")
-                    if driver=='OneWire':
-                        self.interfaces[obj['name']] = OneWireDriver(obj,obj.get('debug',self.verbose))
-                        self.instances[obj['name']] = obj['name']
-                        scribe(f"Driver[{driver}] {obj['name']} defined!")
-                        #scribe(self.interfaces)
-                        #scribe(self.instances)
-                    elif driver=='Analog':
-                        self.interfaces[obj['name']] = AnalogDriver(obj,obj.get('debug',self.verbose))
-                        scribe(f"Driver[{driver}] {obj['name']} defined!")
-                    elif driver=='Digital':
-                        self.interfaces[obj['name']] = DigitalDriver(obj,obj.get('debug',self.verbose))
-                        scribe(f"Driver[{driver}] {obj['name']} defined!")
-                    elif driver=='PWM':
-                        self.interfaces[obj['name']] = PWMDriver(obj,obj.get('debug',self.verbose))
-                        scribe(f"Driver[{driver}] {obj['name']} defined!")
+                    if name=='unknown':
+                        raise ValueError(f"No driver name defined for {driver}")
+                    if self.verbose:
+                        scribe(f"Adding driver: {name}")
+                    if driver in ['OneWire','Analog','Digital','PWM']: 
+                        dx = getattr(__import__('drivers'),driver+'Driver')
                     else:
-                        scribe(f"WARN: Unknown driver type: {obj['name']} --> {obj['driver']}")
+                        dx = getattr(__import__('custom_drivers'),driver+'Driver')
+                    if dx==None:
+                        scribe(f"WARN: Unknown driver[{driver}]: {name} --> {obj}")
+                    else:
+                        scribe(f"{driver}[{name}]: {dir(dx)}")
+                        self.interfaces[name] = dx(obj, verbose)
+                        scribe(f"Driver[{driver}] {name} defined!")
+                        inst = obj.get('instance',False)
+                        if inst:
+                            self.instances[name] = name
+                            scribe(f"Driver[{driver}] {name} 'self' instance added!")
                 except Exception as ex:
-                    scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {obj['name']} --> {driver} {ex.args}")
+                    scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {name} --> {driver} {ex.args}")
                     raise ex
             elif 'interface' in obj:
                 try:

@@ -1,9 +1,9 @@
 # MIT License
 # Interface drivers for broker
 """
-`onewire`
+`drivers.py`
 ====================================================
-Wrapper for a OneWireBus to queue and process messages
+Implements instances of various I/O functions for CootiePy
 
 * Author(s): CanyonCasa
 """
@@ -205,6 +205,21 @@ class AnalogDriver:
         value = (raw /65536) * instance['range'] + instance['bias']
         return {'raw': raw, 'value': value, 'units': instance['units']}
 
+"""
+`DigitalDriver`
+====================================================
+Implements instances of basic digital I/O
+Parameters:
+    pin:    I/O pin board name
+    init:   Initial value; undefined for input
+    term:   Termination, UP or DOWN or OD (open drain) or undefined for push-pull (default)
+    out:    Output value or array of values processed on successive polls
+
+    values:
+        0:  0, '0', 'L', False
+        1:  1, '1', 'H', True
+"""
+
 class DigitalDriver:
 
     def __init__(self, cfg, verbose=False):
@@ -220,23 +235,27 @@ class DigitalDriver:
             raise 'Digital instance requires a pin parameter per instance!'
         name = io.get('name',params['pin'])
         pin = getattr(board,params['pin'])
-        instance = {'cfg': io, 'name': name, 'pin':pin, 'term':params.get('term',"").upper(),
-            'init': str(params.get('init','Z')).upper(), 'io': None}
+
+        instance = { 'cfg': io, 'name': name, 'pin': pin, 'init': str(params.get('init','')).upper(),
+            'term': params.get('term','').upper(), 'io': None }
         try:
             instance['io'] = DigitalInOut(instance['pin'])
-            if instance['init']=="Z":
+            if not instance['init']:
                 instance['io'].direction = digitalio.Direction.INPUT
-                instance['io'].pull = None
-                if instance['term']=="UP": instance['io'].pull = digitalio.Pull.UP
-                if instance['term']=="DOWN": instance['io'].pull = digitalio.Pull.DOWN
+                if instance['term']=='UP':
+                    instance['io'].pull = digitalio.Pull.UP
+                if instance['term']=='DOWN':
+                    instance['io'].pull = digitalio.Pull.DOWN
             else:
                 instance['io'].direction = digitalio.Direction.OUTPUT
-                instance['io'].value = bool(int(instance['init']))
-                instance['io'].DriveMode = digitalio.DriveMode.PUSH_PULL
-                if instance['term']=="OD": instance['io'].DriveMode = digitalio.DriveMode.OPEN_DRAIN
+                if instance['term']=='OD':
+                    instance['io'].DriveMode = digitalio.DriveMode.OPEN_DRAIN
+                else:
+                    instance['io'].DriveMode = digitalio.DriveMode.PUSH_PULL
+                instance['io'].value = self.state(instance['init'])
         except:
-            mode = ('output','input')[instance['init']=="Z"]
-            scribe(f"WARN: Digital {mode} not supported for {instance['name']}, pin: {instance['pin']}!")
+            mode = ('output','input')[instance['init']==""]
+            scribe(f"WARN: Digital {mode} not defined correctly for {instance['name']}, pin: {instance['pin']}!")
             return None
         if self.verbose: scribe(f"DigitalDriver instance: {instance}")
         self.instances.append(instance)
@@ -254,13 +273,46 @@ class DigitalDriver:
         if index==None:
             return {'tag': "err", 'err': f"NO defined Digital instance: {msg['id']}"}
         instance = self.instances[index]
-        if 'out' in msg: instance['io'].value = bool(int(msg['out']))
+        if 'out' in msg:
+            if hasattr(out, "__length__"):
+                instance['out'] = out
+            else:
+                instance['io'].value = self.state(value)
         msg['value'] = instance['io'].value
         return msg
 
     def poll(self):
+        for instance in self.instances:
+            if not instance['out']: continue
+            out = instance['out'][0]
+            instance['out']
+            if instance['out'].length==0:     
+                del instance['out']       
+
         pass
 
+    def state(self, v):
+        if v in [0,'0','L',False]: return False
+        if v in [1,'1','H',True]: return True
+        return None
+
+"""
+`PWMDriver`
+====================================================
+Implements instances of PWMIO
+Parameters:
+    pin:    I/O pin board name
+    freq:   Nominal output Frequncy, default 100
+    dc:     Duty cycle, 0-65535 / 65535 or 0-100% if scale is set, default 0
+    var:    Variable frequency mode, default False
+    scale:  Value for scaling duty cycle as a percent, default 0
+    offset: Value to offset duty cycle, enables a minimum duty cycle, default 0
+
+    if scale == 0:
+        PWM = dc/65353
+    else:
+        PWM = offset + math.floor(dc*scale/100)
+"""
 class PWMDriver:
 
     def __init__(self, cfg, verbose=False):
@@ -271,17 +323,19 @@ class PWMDriver:
         self.aliases = {}
 
     def createInstance(self, io, aliases):
+        
         params = io.get('params',{})
         if not 'pin' in params:
             raise 'PWM instance requires a pin parameter per instance!'
         name = io.get('name',params['pin'])
         pin = getattr(board,params['pin'])
-        instance = {'cfg': io, 'name': name, 'pin':pin, 'dc':params.get('dc',0),
-            'freq': params.get('freq',100)}
+        instance = { 'cfg': io, 'name': name, 'pin':pin, 'dc':params.get('dc',0),
+            'freq': params.get('freq',100), 'offset': params.get('offset',0),
+            'scale': params.get('scale',0), 'var': params.get('var',False) }
         try:
-            instance['pwm'] = pwmio.PWMOut(instance['pin'])
-            instance['pwm'].duty_cycle = self.dutycycle(instance['dc'])
-            instance['pwm'].frequency = instance['freq']
+            instance['pwm'] = pwmio.PWMOut( instance['pin'], 
+                self.calc_dc(instance['dc'],instance['scale'],instance['offset']),
+                instance['freq'], instance['var'] )
         except:
             scribe(f"WARN: PWM not supported for {instance['name']}, pin: {instance['pin']}!")
             return None
@@ -301,13 +355,18 @@ class PWMDriver:
         if index==None:
             return {'tag': "err", 'err': f"NO defined PWM instance: {msg['id']}"}
         instance = self.instances[index]
-        if 'dc' in msg: instance['pwm'].duty_cycle = self.dutycycle(msg['dc'])
-        if 'freq' in msg: instance['pwm'].frequency = msg['freq']
+        if 'dc' in msg:
+            instance['PWM'].duty_cycle = self.calc_dc(msg['dc'],instance['scale'],instance['offset'])
+        if instance['var'] and 'freq' in msg:
+            instance['pwm'].frequency = msg['freq']
         
         return msg
 
     def poll(self):
         pass
 
-    def dutycycle(self,dc):
-        return int(2**16 * dc / 100)
+    def calc_dc(self, dc, scale, offset):
+        if scale==0:
+            return dc
+        else:
+            return offset + math.floor(dc * scale / 100)
