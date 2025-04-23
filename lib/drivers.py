@@ -70,16 +70,17 @@ class OneWireDriver:
         instance = { 'cfg': io, 'address': address, 'device': device }
         #if self.verbose: scribe(f"OneWireDriver instance: {instance}")
         self.instances.append(instance)
+        index = len(self.instances) - 1
         alist = []
         for a in aliases:
             exists = self.aliases.get(a)
             if exists:
                 scribe(f"WARN: OneWire instance '{address['sn']}' alias '{a}' exists; redefining alias")
-            self.aliases[a] = len(self.instances) - 1
+            self.aliases[a] = index
             if a!=address['sn']:
                 alist.append(a)
         scribe(f"Created OneWire instance[{address['sn']}]: {', '.join(alist)}")
-        return self.instances[len(self.instances) - 1]
+        return self.instances[index]
 
     def handler(self, msg):
         self.q.push(msg)
@@ -170,7 +171,7 @@ class AnalogDriver:
             if exists:
                 scribe(f"WARN: Analog instance alias '{a}' exists; redefining alias")
             else:
-                if self.verbose: scribe(f"Creating Analog instance '{a}' reference")
+                if self.verbose: scribe(f"Creating Analog instance '{a}' alias reference")
             self.aliases[a] = len(self.instances) - 1
         return self.instances[len(self.instances) - 1]
 
@@ -228,26 +229,31 @@ class DigitalDriver:
         self.name = cfg['name']
         self.instances = []
         self.aliases = {}
+        self.watches = []
 
     def createInstance(self, io, aliases):
         params = io.get('params',{})
         if not 'pin' in params:
             raise 'Digital instance requires a pin parameter per instance!'
-        name = io.get('name',params['pin'])
         pin = getattr(board,params['pin'])
+        name = io.get('name',params.get('name',pin))
 
         instance = { 'cfg': io, 'name': name, 'pin': pin, 'init': str(params.get('init','')).upper(),
-            'term': params.get('term','').upper(), 'io': None }
+            'term': params.get('term','').upper(), 'io': None, last: None, tag: str(params.get('tag','')) }
         try:
             instance['io'] = DigitalInOut(instance['pin'])
             if not instance['init']:
                 instance['io'].direction = digitalio.Direction.INPUT
+                instance['dir'] = 'IN'
                 if instance['term']=='UP':
                     instance['io'].pull = digitalio.Pull.UP
                 if instance['term']=='DOWN':
                     instance['io'].pull = digitalio.Pull.DOWN
+                if params.get('watch',False):
+                    self.watches.append(len(self.instances)) # index of this instance (not yet added)
             else:
                 instance['io'].direction = digitalio.Direction.OUTPUT
+                instance['dir'] = 'OUT'
                 if instance['term']=='OD':
                     instance['io'].DriveMode = digitalio.DriveMode.OPEN_DRAIN
                 else:
@@ -260,12 +266,11 @@ class DigitalDriver:
         if self.verbose: scribe(f"DigitalDriver instance: {instance}")
         self.instances.append(instance)
         for a in aliases:
-            exists = self.aliases.get(a)
-            if exists:
+            if self.aliases.get(a): # already exists?
                 scribe(f"WARN: Digital instance alias '{a}' exists; redefining alias")
             else:
-                if self.verbose: scribe(f"Creating Digital instance '{a}' reference")
-            self.aliases[a] = len(self.instances) - 1
+                if self.verbose: scribe(f"Creating Digital instance '{a}' alias reference")
+            self.aliases[a] = len(self.instances) - 1 # instance aliases reference the primary instance
         return self.instances[len(self.instances) - 1]
 
     def handler(self, msg):
@@ -276,20 +281,29 @@ class DigitalDriver:
         if 'out' in msg:
             if hasattr(out, "__length__"):
                 instance['out'] = out
+                self.watches.append(index)
             else:
                 instance['io'].value = self.state(value)
         msg['value'] = instance['io'].value
         return msg
 
     def poll(self):
-        for instance in self.instances:
-            if not instance['out']: continue
-            out = instance['out'][0]
-            instance['out']
-            if instance['out'].length==0:     
-                del instance['out']       
-
-        pass
+        msgs = []
+        for w in self.watches[:]:
+            instance = self.instances[w]
+            if instance['dir']=='OUT':
+                instance['io'].value = instance['out'][0]
+                instance['last'] = instance['out'][0]
+                instance['out'] = instance['out'][1:]
+                if len(instance['out'])==0:
+                    del self.watches[w]
+            else:
+                msg = { 'id': instance['name'], 'old': instance['last'], 'new': instance['value'] }
+                instance['last'] = msg['new']
+                if instance['tag']:
+                    msg.tag = instance['tag']
+                msgs.append(msg)
+        return msgs
 
     def state(self, v):
         if v in [0,'0','L',False]: return False
@@ -369,4 +383,4 @@ class PWMDriver:
         if scale==0:
             return dc
         else:
-            return offset + math.floor(dc * scale / 100)
+            return offset + math.floor(dc * (scale-offset) / 100)

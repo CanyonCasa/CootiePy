@@ -64,7 +64,7 @@ class IO:
             cls.instance = super(IO, cls).__new__(cls)
         return cls.instance
 
-    def __init__(self, obj=None, verbose=False):
+    def __init__(self, obj=None, verbose=False): # object is cfg.IO
         self.verbose = verbose
         self.interfaces = {}
         self.instances = {}
@@ -72,12 +72,12 @@ class IO:
             self.add([d for i,d in enumerate(obj) if 'driver' in d])
             self.add([x for i,x in enumerate(obj) if 'interface' in x])
 
-    def add(self,obj):
-        if isinstance(obj, list):
+    def add(self,obj): # obj is cfg.IO or element of cfg.IO
+        if isinstance(obj, list): # when cfg.IO, expand an element at a time
             for o in obj:
                 self.add(o)
         else:
-            if 'driver' in obj:
+            if 'driver' in obj: # obj is a specific IO driver
                 driver = obj['driver']
                 name = obj.get('name','unknown')
                 verbose = obj.get('debug',self.verbose)
@@ -96,21 +96,21 @@ class IO:
                         scribe(f"{driver}[{name}]: {dir(dx)}")
                         self.interfaces[name] = dx(obj, verbose)
                         scribe(f"Driver[{driver}] {name} defined!")
-                        inst = obj.get('instance',False)
-                        if inst:
+                        if obj.get('instance',False): # optionally add instance for driver itself, e.g. OneWire bus
                             self.instances[name] = name
                             scribe(f"Driver[{driver}] {name} 'self' instance added!")
                 except Exception as ex:
                     scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load driver: {name} --> {driver} {ex.args}")
                     raise ex
-            elif 'interface' in obj:
+            elif 'interface' in obj: # obj is a specific IO interface
                 try:
                     aliases = [str(x) for x in (set([obj.get('id'),obj.get('name'),obj.get('sn'),obj.get('addr')] +
                         obj.get('aliases',[])) - {None})]   # aliases defined for each io object for cross references
                     if self.verbose: scribe(f"Adding instance[{obj['interface']}]: {aliases}")
                     interface = self.interfaces.get(obj['interface'],None)
+                    identity = self.identity(obj)
                     if not interface:
-                        scribe(f"WARN: Ignoring instance {self.identity(obj)}, interface {obj['interface']} NOT DEFINED")
+                        scribe(f"WARN: Ignoring instance {identity}, interface {obj['interface']} NOT DEFINED")
                     else:
                         interface.createInstance(obj, aliases)
                         for a in aliases:
@@ -118,7 +118,7 @@ class IO:
                             if exists:
                                 scribe(f"WARN: Interface '{obj['interface']}' alias '{a}' exists; redefining alias")
                             else:
-                                if self.verbose: scribe(f"Creating instance alias '{a}' for interface '{obj['interface']}'")
+                                if self.verbose: scribe(f"Creating IO interface '{obj['interface']}' instance alias '{a}' for instance {identity}")
                             self.instances[a] = obj['interface']
                 except Exception as ex:
                     scribe(f"ERROR[{type(ex).__name__}]: IO.add Failed to load instance", ex.args)
@@ -146,9 +146,9 @@ class IO:
         for interface in self.interfaces.values():
             result = interface.poll()
             if result: 
-                results.append(result)
-                if trace:
-                    scribe(f"poll[{interface.name}]")
+                results.extend(result)
+            if trace:
+                scribe(f"poll[{interface.name}]: {result}")
         return results
 
 

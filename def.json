@@ -87,9 +87,21 @@
         },
         {
             "interface": "digital",
+            "desc": "Test Switch",
+            "name": "switch",
+            "params": {"pin":"D5", "term":"down", "watch": true}
+        },
+        {
+            "interface": "digital",
+            "desc": "Test Switch",
+            "name": "switch",
+            "params": {"pin":"D4", "term":"up"}
+        },
+        {
+            "interface": "digital",
             "desc": "Test output",
             "name": "test",
-            "params": {"pin":"D3", "term":"up", "init": 1}
+            "params": {"pin":"D3", "init": 1}
         },
         {
             "interface": "pwm",
