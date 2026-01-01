@@ -158,7 +158,8 @@ class OneWireBus:
         family = rom[0]
         sn = OneWireBus.bytes2hex(rom)    # defacto hex string
         hxx = sn.replace(' ','')    # hexstring, no spaces
-        rpi = (hxx[:2] + '-' + hxx[2:14]).lower()    # rpi/node-red format
+        #rpi = (hxx[:2] + '-' + hxx[2:14]).lower()    # rpi/node-red format
+        rpi = (hxx[:2] + '-' + ''.join([hxx[i-1]+hxx[i] for i in range(13,2,-2)])).lower()    # rpi/node-red format
         rev = ' '.join(sn.split(' ')[::-1]) # reverse order
         return {'family': family,'rom': rom, 'sn': sn, 'hex':hxx,'rpi': rpi,'reverse': rev}
 
