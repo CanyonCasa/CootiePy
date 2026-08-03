@@ -15,10 +15,10 @@ See readme for details
 #__version__ = "0.0.0-auto.0"
 #__repo__ = "https://github.com/CanyonCasa/Custom-Node-Red-Nodes"
 
-from microcontroller import Pin
-from onewireio import OneWire
-import digitalio
-from time import monotonic_ns, sleep
+from microcontroller import Pin # type: ignore
+from onewireio import OneWire # type: ignore
+import digitalio # type: ignore
+from time import monotonic_ns
 
 from scribe import Scribe
 scribe = Scribe('WIRE').scribe
@@ -152,13 +152,12 @@ class OneWireBus:
 
     @staticmethod
     def frmt_addr(rom) -> dict:
-        """Converts a rom bytearray into multiple address forms for display, etc"""
+        """Converts a rom bytearray into multiple address forms for display, reference, etc"""
         if rom == None:
             return {'family': None,'rom': None, 'sn': None, 'hex':None,'rpi': None,'reverse': None}
         family = rom[0]
         sn = OneWireBus.bytes2hex(rom)    # defacto hex string
         hxx = sn.replace(' ','')    # hexstring, no spaces
-        #rpi = (hxx[:2] + '-' + hxx[2:14]).lower()    # rpi/node-red format
         rpi = (hxx[:2] + '-' + ''.join([hxx[i-1]+hxx[i] for i in range(13,2,-2)])).lower()    # rpi/node-red format
         rev = ' '.join(sn.split(' ')[::-1]) # reverse order
         return {'family': family,'rom': rom, 'sn': sn, 'hex':hxx,'rpi': rpi,'reverse': rev}

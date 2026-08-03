@@ -1,6 +1,6 @@
 #import supervisor
 #import microcontroller
-import board
+import board # type: ignore
 #import os
 #import usb_cdc
 #import json
@@ -9,7 +9,7 @@ from scribe import Scribe
 from onewire import OneWireBus
 import onewire_temps, onewire_ports, onewire_other
 try:
-    import onewire_user
+    import onewire_user # type: ignore
 except:
     pass
 
@@ -26,11 +26,10 @@ cfg = {
     "instance": True
 }
 
-print()
 scribe("Initialization...")
 pin = getattr(board,cfg["params"]["pin"])
 oneWire = OneWireBus(pin)
-scribe(f"OneWireBus[{pin}]: {oneWire} => {dir(oneWire)}")
+scribe(f"OneWireBus defined for pin: {pin}")
 oneWire.status(cfg["debug"])
 
 try:
@@ -39,7 +38,7 @@ try:
     if found:
         for f in found:
             if f['family'] in OneWireBus.REGISTERED:
-                scribe(f"Found[{f['sn']}]: {OneWireBus.REGISTERED[f['family']].DESC}")
+                scribe(f"Found: {OneWireBus.REGISTERED[f['family']].DESC}")
             else:
                 scribe(f"Found[{f['sn']}]: unknown type")
             for key, value in f.items():
